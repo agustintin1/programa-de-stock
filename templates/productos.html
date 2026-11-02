@@ -1,0 +1,78 @@
+{% extends 'base.html' %}
+
+{% block title %}Inventario Completo - Control de Stock{% endblock %}
+
+{% block content %}
+<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem;">
+    <h2>Inventario General 📦</h2>
+    <a href="/productos/nuevo" class="btn">+ Nuevo Producto</a>
+</div>
+
+<!-- Barra de Búsqueda -->
+<form method="GET" action="/productos" style="display: flex; gap: 0.5rem; margin-bottom: 1.5rem;">
+    <input type="text" name="busqueda" value="{{ busqueda if busqueda else '' }}" placeholder="Buscar por nombre o categoría..." style="flex: 1; padding: 0.75rem; border: 1px solid var(--border-color); border-radius: var(--radius); font-size: 1rem;">
+    <button type="submit" class="btn" style="background-color: var(--primary);">Buscar</button>
+    {% if busqueda %}
+        <a href="/productos" style="background-color: #cbd5e1; color: var(--primary); padding: 0.75rem 1rem; border-radius: var(--radius); text-decoration: none; font-weight: 600; display: inline-flex; align-items: center;">Limpiar</a>
+    {% endif %}
+</form>
+
+<div class="card">
+    <table>
+        <thead>
+            <tr>
+                <th>ID</th>
+                <th>Producto</th>
+                <th>Categoría</th>
+                <th>Precio</th>
+                <th>Stock</th>
+                <th style="text-align: center;">Acciones</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% if productos %}
+                {% for p in productos %}
+                <tr>
+                    <td>{{ p['id'] }}</td>
+                    <td style="font-weight: 600;">{{ p['nombre'] }}</td>
+                    <td>{{ p['categoria'] }}</td>
+                    <td>${{ "{:,.2f}".format(p['precio']) }}</td>
+                    <td>
+                        {% if p['stock'] <= 5 %}
+                            <span class="badge-danger">{{ p['stock'] }} un.</span>
+                        {% else %}
+                            <span class="badge-success">{{ p['stock'] }} un.</span>
+                        {% endif %}
+                    </td>
+                    <td style="text-align: center;">
+                        <div style="display: flex; justify-content: center; gap: 0.5rem; align-items: center;">
+                            <!-- Botón Editar -->
+                            <a href="/productos/editar/{{ p['id'] }}" style="background-color: #3b82f6; color: white; border: none; width: 30px; height: 30px; border-radius: 4px; font-weight: bold; text-decoration: none; display: flex; align-items: center; justify-content: center;" title="Editar producto">✏️</a>
+                            
+                            <!-- Botón Restar -->
+                            <form action="/productos/ajustar/{{ p['id'] }}/restar" method="POST" style="margin: 0;">
+                                <button type="submit" style="background-color: #ef4444; color: white; border: none; width: 30px; height: 30px; border-radius: 4px; font-weight: bold; cursor: pointer; display: flex; align-items: center; justify-content: center;" title="Restar 1">-</button>
+                            </form>
+                            
+                            <!-- Botón Sumar -->
+                            <form action="/productos/ajustar/{{ p['id'] }}/sumar" method="POST" style="margin: 0;">
+                                <button type="submit" style="background-color: #10b981; color: white; border: none; width: 30px; height: 30px; border-radius: 4px; font-weight: bold; cursor: pointer; display: flex; align-items: center; justify-content: center;" title="Sumar 1">+</button>
+                            </form>
+
+                            <!-- Botón Eliminar -->
+                            <form action="/productos/eliminar/{{ p['id'] }}" method="POST" style="margin: 0;" onsubmit="return confirm('¿Estás seguro de que querés eliminar este producto?');">
+                                <button type="submit" style="background-color: #64748b; color: white; border: none; width: 30px; height: 30px; border-radius: 4px; font-weight: bold; cursor: pointer; display: flex; align-items: center; justify-content: center;" title="Eliminar producto">🗑️</button>
+                            </form>
+                        </div>
+                    </td>
+                </tr>
+                {% endfor %}
+            {% else %}
+                <tr>
+                    <td colspan="6" style="text-align: center; padding: 2rem; color: #64748b;">No se encontraron productos en el inventario.</td>
+                </tr>
+            {% endif %}
+        </tbody>
+    </table>
+</div>
+{% endblock %}

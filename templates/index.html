@@ -1,0 +1,55 @@
+{% extends 'base.html' %}
+
+{% block title %}Dashboard - Control de Stock{% endblock %}
+
+{% block content %}
+<h2 style="margin-bottom: 1.5rem;">Resumen de Inventario 📊</h2>
+
+<!-- Tarjetas de métricas principales -->
+<div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 1.5rem; margin-bottom: 2rem;">
+    <div class="card" style="text-align: center;">
+        <span style="font-size: 2.25rem; font-weight: 700; color: var(--accent);">{{ total_productos }}</span>
+        <h4 style="margin: 0.5rem 0 0 0;">Total Productos</h4>
+    </div>
+    
+    <div class="card" style="text-align: center;">
+        <span style="font-size: 2.25rem; font-weight: 700; color: var(--success);">${{ "{:,.2f}".format(valor_total) }}</span>
+        <h4 style="margin: 0.5rem 0 0 0;">Valor del Inventario</h4>
+    </div>
+
+    <div class="card" style="text-align: center;">
+        <span style="font-size: 2.25rem; font-weight: 700; color: var(--danger);">{{ stock_critico }}</span>
+        <h4 style="margin: 0.5rem 0 0 0;">Stock Crítico (≤ 5)</h4>
+    </div>
+</div>
+
+<div class="card">
+    <h3 style="margin-top: 0; color: var(--primary);">Últimos Productos Ingresados</h3>
+    <table>
+        <thead>
+            <tr>
+                <th>Producto</th>
+                <th>Categoría</th>
+                <th>Precio</th>
+                <th>Stock</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for p in productos %}
+            <tr>
+                <td style="font-weight: 600;">{{ p['nombre'] }}</td>
+                <td>{{ p['categoria'] }}</td>
+                <td>${{ "{:,.2f}".format(p['precio']) }}</td>
+                <td>
+                    {% if p['stock'] <= 5 %}
+                        <span class="badge-danger">{{ p['stock'] }} un. (Bajo)</span>
+                    {% else %}
+                        <span class="badge-success">{{ p['stock'] }} un.</span>
+                    {% endif %}
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endblock %}
