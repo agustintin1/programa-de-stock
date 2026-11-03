@@ -5,6 +5,7 @@ import sqlite3
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 
 _TEMPORARY_DIRECTORY = tempfile.TemporaryDirectory()
@@ -30,7 +31,37 @@ os.environ['STOCK_DATABASE'] = str(_DATABASE_PATH)
 os.environ.pop('STOCK_ADMIN_USERNAME', None)
 os.environ.pop('STOCK_ADMIN_PASSWORD', None)
 
-from app import app as aplicacion
+import app as inventario
+
+aplicacion = inventario.app
+
+
+class AdaptadorDeBaseDeDatosTest(unittest.TestCase):
+  def test_ejecutar_adapta_placeholders_para_postgresql(self):
+    class CursorDePrueba:
+      sql = None
+      parametros = None
+
+      def execute(self, sql, parametros):
+        self.sql = sql
+        self.parametros = parametros
+
+    cursor = CursorDePrueba()
+    with (
+        patch.object(inventario, 'database_url', 'postgresql://test'),
+        patch.object(inventario, 'POSTGRES_DISPONIBLE', True),
+    ):
+      inventario.ejecutar(
+          cursor,
+          'INSERT INTO ubicaciones (nombre) VALUES (?)',
+          ('Depósito principal',),
+      )
+
+    self.assertEqual(
+        cursor.sql,
+        'INSERT INTO ubicaciones (nombre) VALUES (%s)',
+    )
+    self.assertEqual(cursor.parametros, ('Depósito principal',))
 
 
 class InventarioTest(unittest.TestCase):

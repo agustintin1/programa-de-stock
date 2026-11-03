@@ -221,7 +221,8 @@ def inicializar_base_datos():
         'CREATE INDEX IF NOT EXISTS idx_movimientos_fecha '
         'ON movimientos(creado_en)'
     )
-    cursor.execute(
+    ejecutar(
+        cursor,
         'INSERT INTO ubicaciones (nombre) VALUES (?) ON CONFLICT (nombre) DO NOTHING',
         ('Depósito principal',),
     )
