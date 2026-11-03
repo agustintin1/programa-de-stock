@@ -1,0 +1,80 @@
+{% extends 'base.html' %}
+{% block title %}Compras y ventas · Stock Claro{% endblock %}
+{% block content %}
+<div class="page-heading">
+    <div><h1>Compras y ventas 🔄</h1><p>Cada movimiento actualiza el stock y queda guardado con tu usuario.</p></div>
+    <a class="btn btn-secondary" href="{{ url_for('exportar_movimientos') }}">⬇ Descargar reporte</a>
+</div>
+<div class="split">
+    <section class="card">
+        <h2>Registrar movimiento</h2>
+        {% if productos and ubicaciones %}
+        <form method="post">
+            <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+            <div class="field">
+                <label for="tipo">¿Qué pasó?</label>
+                <select id="tipo" name="tipo" required>
+                    <option value="compra">📥 Compra / ingreso</option>
+                    <option value="venta">📤 Venta / salida</option>
+                    <option value="ajuste_entrada">＋ Ajuste: sumar stock</option>
+                    <option value="ajuste_salida">− Ajuste: restar stock</option>
+                </select>
+            </div>
+            <div class="field">
+                <label for="producto_id">Producto</label>
+                <select id="producto_id" name="producto_id" required>
+                    {% for p in productos %}<option value="{{ p['id'] }}">{{ p['nombre'] }}</option>{% endfor %}
+                </select>
+            </div>
+            <div class="field">
+                <label for="ubicacion_id">Depósito</label>
+                <select id="ubicacion_id" name="ubicacion_id" required>
+                    {% for u in ubicaciones %}<option value="{{ u['id'] }}">{{ u['nombre'] }}</option>{% endfor %}
+                </select>
+            </div>
+            <div class="field">
+                <label for="cantidad">Cantidad de unidades</label>
+                <input id="cantidad" type="number" min="1" step="1" name="cantidad" placeholder="Ej.: 12" required>
+            </div>
+            <div class="field">
+                <label for="proveedor">Proveedor <span class="muted">(si es una compra)</span></label>
+                <input id="proveedor" name="proveedor" maxlength="160" placeholder="Nombre del proveedor">
+            </div>
+            <div class="field">
+                <label for="nota">Nota <span class="muted">(opcional)</span></label>
+                <textarea id="nota" name="nota" rows="2" maxlength="1000" placeholder="Factura, pedido o comentario"></textarea>
+            </div>
+            <button class="btn" type="submit" style="width:100%">Guardar movimiento ✓</button>
+        </form>
+        {% elif not ubicaciones %}
+        <p class="empty">No hay depósitos activos. Pídele al administrador que cree uno.</p>
+        {% else %}
+        <p class="empty">Primero agrega al menos un producto al inventario.</p>
+        {% endif %}
+    </section>
+    <section class="card">
+        <div class="section-title">
+            <h2>Historial reciente</h2>
+            <span class="badge badge-neutral">Últimos 200</span>
+        </div>
+        <div class="table-wrap">
+            <table>
+                <thead><tr><th>Tipo</th><th>Producto / depósito</th><th>Cantidad</th><th>Proveedor</th><th>Usuario / fecha</th></tr></thead>
+                <tbody>
+                    {% for m in historial %}
+                    <tr>
+                        <td><span class="badge badge-neutral">{{ m['tipo'].replace('_', ' ') }}</span></td>
+                        <td><strong>{{ m['producto'] }}</strong><br><span class="muted">{{ m['ubicacion'] }}</span>{% if m['nota'] %}<br><span class="muted">{{ m['nota'] }}</span>{% endif %}</td>
+                        <td>{{ m['cantidad'] }} un.</td>
+                        <td>{{ m['proveedor'] or '—' }}</td>
+                        <td>{{ m['usuario'] }}<br><span class="muted">{{ m['creado_en'] }}</span></td>
+                    </tr>
+                    {% else %}
+                    <tr><td class="empty" colspan="5">El historial aparecerá acá cuando registres el primer movimiento.</td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </section>
+</div>
+{% endblock %}

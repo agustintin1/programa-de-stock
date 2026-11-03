@@ -1,78 +1,77 @@
 {% extends 'base.html' %}
-
-{% block title %}Inventario Completo - Control de Stock{% endblock %}
-
+{% block title %}Productos · Stock Claro{% endblock %}
 {% block content %}
-<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem;">
-    <h2>Inventario General 📦</h2>
-    <a href="/productos/nuevo" class="btn">+ Nuevo Producto</a>
+<div class="page-heading">
+    <div>
+        <h1>Tu inventario 📦</h1>
+        <p>Busca un producto, escanea su código o actualiza sus datos.</p>
+    </div>
+    <a class="btn" href="{{ url_for('nuevo_producto') }}">＋ Agregar producto</a>
 </div>
 
-<!-- Barra de Búsqueda -->
-<form method="GET" action="/productos" style="display: flex; gap: 0.5rem; margin-bottom: 1.5rem;">
-    <input type="text" name="busqueda" value="{{ busqueda if busqueda else '' }}" placeholder="Buscar por nombre o categoría..." style="flex: 1; padding: 0.75rem; border: 1px solid var(--border-color); border-radius: var(--radius); font-size: 1rem;">
-    <button type="submit" class="btn" style="background-color: var(--primary);">Buscar</button>
-    {% if busqueda %}
-        <a href="/productos" style="background-color: #cbd5e1; color: var(--primary); padding: 0.75rem 1rem; border-radius: var(--radius); text-decoration: none; font-weight: 600; display: inline-flex; align-items: center;">Limpiar</a>
-    {% endif %}
-</form>
+<section class="card" style="margin-bottom:1rem">
+    <div class="toolbar">
+        <form action="{{ url_for('productos') }}" method="get">
+            <label for="busqueda" style="position:absolute;left:-9999px">Buscar producto</label>
+            <input id="busqueda" type="search" name="busqueda" value="{{ busqueda }}" placeholder="🔎 Nombre, categoría o código de barras" autofocus>
+            <label for="ubicacion_id" style="position:absolute;left:-9999px">Depósito</label>
+            <select id="ubicacion_id" name="ubicacion_id" style="max-width:230px">
+                {% for ubicacion in ubicaciones %}
+                <option value="{{ ubicacion['id'] }}" {% if ubicacion['id'] == ubicacion_id %}selected{% endif %}>{{ ubicacion['nombre'] }}</option>
+                {% endfor %}
+            </select>
+            <button class="btn" type="submit">Buscar</button>
+            {% if busqueda %}<a class="btn btn-secondary" href="{{ url_for('productos', ubicacion_id=ubicacion_id) }}">Limpiar</a>{% endif %}
+        </form>
+    </div>
+</section>
 
-<div class="card">
-    <table>
-        <thead>
-            <tr>
-                <th>ID</th>
-                <th>Producto</th>
-                <th>Categoría</th>
-                <th>Precio</th>
-                <th>Stock</th>
-                <th style="text-align: center;">Acciones</th>
-            </tr>
-        </thead>
-        <tbody>
-            {% if productos %}
+<section class="card">
+    <div class="table-wrap">
+        <table>
+            <thead>
+                <tr><th>Producto</th><th>Categoría / código</th><th>Precio</th><th>Stock</th><th>Acciones</th></tr>
+            </thead>
+            <tbody>
                 {% for p in productos %}
                 <tr>
-                    <td>{{ p['id'] }}</td>
-                    <td style="font-weight: 600;">{{ p['nombre'] }}</td>
-                    <td>{{ p['categoria'] }}</td>
+                    <td><strong>{{ p['nombre'] }}</strong></td>
+                    <td>{{ p['categoria'] }}{% if p['codigo_barras'] %}<br><span class="muted">{{ p['codigo_barras'] }}</span>{% endif %}</td>
                     <td>${{ "{:,.2f}".format(p['precio']) }}</td>
                     <td>
-                        {% if p['stock'] <= 5 %}
-                            <span class="badge-danger">{{ p['stock'] }} un.</span>
+                        {% if p['stock'] <= p['stock_minimo'] %}
+                        <span class="badge badge-low">{{ p['stock'] }} un. · Reponer</span>
                         {% else %}
-                            <span class="badge-success">{{ p['stock'] }} un.</span>
+                        <span class="badge badge-good">{{ p['stock'] }} un.</span>
                         {% endif %}
                     </td>
-                    <td style="text-align: center;">
-                        <div style="display: flex; justify-content: center; gap: 0.5rem; align-items: center;">
-                            <!-- Botón Editar -->
-                            <a href="/productos/editar/{{ p['id'] }}" style="background-color: #3b82f6; color: white; border: none; width: 30px; height: 30px; border-radius: 4px; font-weight: bold; text-decoration: none; display: flex; align-items: center; justify-content: center;" title="Editar producto">✏️</a>
-                            
-                            <!-- Botón Restar -->
-                            <form action="/productos/ajustar/{{ p['id'] }}/restar" method="POST" style="margin: 0;">
-                                <button type="submit" style="background-color: #ef4444; color: white; border: none; width: 30px; height: 30px; border-radius: 4px; font-weight: bold; cursor: pointer; display: flex; align-items: center; justify-content: center;" title="Restar 1">-</button>
+                    <td>
+                        <div class="actions">
+                            <a class="btn btn-secondary btn-small" href="{{ url_for('editar_producto', id=p['id']) }}">Editar</a>
+                            <form action="{{ url_for('ajustar_stock', id=p['id'], accion='restar') }}" method="post">
+                                <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+                                <input type="hidden" name="ubicacion_id" value="{{ ubicacion_id }}">
+                                <button class="btn btn-secondary btn-small" type="submit" title="Restar una unidad">−</button>
                             </form>
-                            
-                            <!-- Botón Sumar -->
-                            <form action="/productos/ajustar/{{ p['id'] }}/sumar" method="POST" style="margin: 0;">
-                                <button type="submit" style="background-color: #10b981; color: white; border: none; width: 30px; height: 30px; border-radius: 4px; font-weight: bold; cursor: pointer; display: flex; align-items: center; justify-content: center;" title="Sumar 1">+</button>
+                            <form action="{{ url_for('ajustar_stock', id=p['id'], accion='sumar') }}" method="post">
+                                <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+                                <input type="hidden" name="ubicacion_id" value="{{ ubicacion_id }}">
+                                <button class="btn btn-small" type="submit" title="Sumar una unidad">＋</button>
                             </form>
-
-                            <!-- Botón Eliminar -->
-                            <form action="/productos/eliminar/{{ p['id'] }}" method="POST" style="margin: 0;" onsubmit="return confirm('¿Estás seguro de que querés eliminar este producto?');">
-                                <button type="submit" style="background-color: #64748b; color: white; border: none; width: 30px; height: 30px; border-radius: 4px; font-weight: bold; cursor: pointer; display: flex; align-items: center; justify-content: center;" title="Eliminar producto">🗑️</button>
+                            {% if rol_actual == 'admin' %}
+                            <form action="{{ url_for('eliminar_producto', id=p['id']) }}" method="post" onsubmit="return confirm('¿Archivar este producto? Su historial no se borrará.');">
+                                <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+                                <button class="btn btn-danger btn-small" type="submit">Archivar</button>
                             </form>
+                            {% endif %}
                         </div>
                     </td>
                 </tr>
+                {% else %}
+                <tr><td class="empty" colspan="5">{% if busqueda %}No encontramos coincidencias. Prueba otro nombre o código.{% else %}Todavía no hay productos. Agrega el primero para empezar. 🌱{% endif %}</td></tr>
                 {% endfor %}
-            {% else %}
-                <tr>
-                    <td colspan="6" style="text-align: center; padding: 2rem; color: #64748b;">No se encontraron productos en el inventario.</td>
-                </tr>
-            {% endif %}
-        </tbody>
-    </table>
-</div>
+            </tbody>
+        </table>
+    </div>
+</section>
 {% endblock %}

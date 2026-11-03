@@ -3,120 +3,165 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>{% block title %}Control de Stock{% endblock %}</title>
+    <meta name="theme-color" content="#172554">
+    <title>{% block title %}Stock Claro{% endblock %}</title>
     <style>
         :root {
-            --primary: #0f172a;
-            --accent: #041d53;
-            --danger: #ef4444;
-            --warning: #f59e0b;
-            --success: #10b981;
-            --bg-color: #f8fafc;
-            --card-bg: #ffffff;
-            --text-main: #334155;
-            --border-color: #e2e8f0;
-            --radius: 8px;
+            --ink: #172554;
+            --blue: #3156d3;
+            --mint: #d7f8e9;
+            --green: #087443;
+            --red: #b42318;
+            --red-bg: #fff0ee;
+            --gold: #8a5700;
+            --gold-bg: #fff5d8;
+            --paper: #f5f7fb;
+            --card: #fff;
+            --muted: #64748b;
+            --line: #e4e9f2;
+            --radius: 16px;
         }
-
+        * { box-sizing: border-box; }
         body {
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            background-color: var(--bg-color);
-            color: var(--text-main);
             margin: 0;
-            padding: 0;
+            background: var(--paper);
+            color: #26334b;
+            font-family: Inter, "Segoe UI", Arial, sans-serif;
+            line-height: 1.5;
         }
-
+        a { color: var(--blue); }
         header {
-            background-color: var(--primary);
-            color: white;
-            padding: 1rem 2rem;
+            position: sticky;
+            top: 0;
+            z-index: 2;
             display: flex;
-            justify-content: space-between;
             align-items: center;
-        }
-
-        header h1 { margin: 0; font-size: 1.25rem; font-weight: 700; }
-        
-        nav a {
-            color: #94a3b8;
-            text-decoration: none;
-            margin-left: 1.5rem;
-            font-weight: 600;
-            transition: color 0.2s;
-        }
-
-        nav a:hover { color: white; }
-
-        .container {
-            max-width: 1100px;
-            margin: 2rem auto;
-            padding: 0 1rem;
-        }
-
-        .card {
-            background: var(--card-bg);
-            border: 1px solid var(--border-color);
-            border-radius: var(--radius);
-            padding: 1.5rem;
-            box-shadow: 0 1px 3px rgba(0,0,0,0.05);
-        }
-
-        .btn {
-            background-color: var(--accent);
+            justify-content: space-between;
+            gap: 1rem;
+            padding: .8rem max(1.25rem, calc((100% - 1180px) / 2));
             color: white;
-            padding: 0.5rem 1rem;
-            border-radius: var(--radius);
-            text-decoration: none;
-            font-weight: 600;
-            display: inline-block;
-            border: none;
-            cursor: pointer;
+            background: var(--ink);
+            box-shadow: 0 4px 18px #17255420;
         }
-
-        table {
-            width: 100%;
-            border-collapse: collapse;
-            margin-top: 1rem;
+        .brand { display: flex; align-items: center; gap: .65rem; color: white; text-decoration: none; }
+        .brand-icon { display: grid; width: 40px; height: 40px; place-items: center; border-radius: 13px; background: #3156d3; font-size: 1.25rem; }
+        .brand strong { display: block; letter-spacing: .03em; }
+        .brand small { display: block; color: #cbd5e1; font-size: .73rem; }
+        nav { display: flex; align-items: center; flex-wrap: wrap; gap: .25rem; }
+        nav a, .nav-button { border: 0; border-radius: 9px; padding: .55rem .7rem; color: #d9e3ff; background: transparent; text-decoration: none; font: inherit; font-size: .91rem; font-weight: 650; cursor: pointer; }
+        nav a:hover, .nav-button:hover { background: #ffffff19; color: white; }
+        .user-menu { display: flex; align-items: center; gap: .6rem; padding-left: .5rem; color: #d9e3ff; font-size: .85rem; }
+        main { width: min(1180px, calc(100% - 2rem)); margin: 2rem auto 4rem; }
+        h1, h2, h3, p { margin-top: 0; }
+        h1 { margin-bottom: .35rem; color: var(--ink); font-size: clamp(1.65rem, 3vw, 2.15rem); letter-spacing: -.035em; }
+        h2 { color: var(--ink); font-size: 1.12rem; }
+        .page-heading { display: flex; align-items: center; justify-content: space-between; gap: 1rem; margin-bottom: 1.4rem; }
+        .page-heading p { margin: .25rem 0 0; color: var(--muted); }
+        .card { padding: 1.35rem; border: 1px solid var(--line); border-radius: var(--radius); background: var(--card); box-shadow: 0 8px 26px #17255408; }
+        .grid { display: grid; gap: 1rem; }
+        .metrics { grid-template-columns: repeat(3, minmax(0, 1fr)); margin-bottom: 1.25rem; }
+        .metric { position: relative; overflow: hidden; min-height: 125px; }
+        .metric:after { position: absolute; right: -15px; bottom: -34px; width: 100px; height: 100px; border-radius: 50%; background: #3156d310; content: ""; }
+        .metric-label { color: var(--muted); font-size: .9rem; font-weight: 650; }
+        .metric-value { display: block; margin-top: .2rem; color: var(--ink); font-size: 2rem; font-weight: 800; letter-spacing: -.04em; }
+        .toolbar { display: flex; align-items: center; flex-wrap: wrap; gap: .7rem; }
+        .toolbar form { display: flex; flex: 1; flex-wrap: wrap; gap: .55rem; }
+        .btn, button.btn {
+            display: inline-flex; min-height: 42px; align-items: center; justify-content: center;
+            gap: .4rem; border: 1px solid transparent; border-radius: 10px;
+            padding: .6rem .95rem; color: white; background: var(--blue);
+            text-decoration: none; font: inherit; font-weight: 700; cursor: pointer;
         }
-
-        th, td {
-            text-align: left;
-            padding: 0.75rem 1rem;
-            border-bottom: 1px solid var(--border-color);
+        .btn:hover { filter: brightness(.95); }
+        .btn-secondary { border-color: var(--line); color: var(--ink); background: white; }
+        .btn-danger { background: var(--red); }
+        .btn-small { min-height: 34px; padding: .35rem .65rem; font-size: .88rem; }
+        input, select, textarea {
+            width: 100%; min-height: 42px; border: 1px solid #d6deeb; border-radius: 10px;
+            padding: .65rem .75rem; color: #26334b; background: white; font: inherit;
         }
-
-        th { background-color: #f1f5f9; color: var(--primary); }
-
-        .badge-danger {
-            background-color: #fee2e2;
-            color: #991b1b;
-            padding: 0.25rem 0.5rem;
-            border-radius: 4px;
-            font-weight: 600;
-            font-size: 0.85rem;
+        input:focus, select:focus, textarea:focus { outline: 3px solid #3156d326; border-color: var(--blue); }
+        label { display: block; margin-bottom: .4rem; color: var(--ink); font-size: .91rem; font-weight: 700; }
+        .field { margin-bottom: 1rem; }
+        .muted, .hint { color: var(--muted); font-size: .88rem; }
+        .hint { display: block; margin-top: .35rem; }
+        .form-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .85rem 1rem; }
+        .table-wrap { overflow-x: auto; }
+        table { width: 100%; border-collapse: collapse; }
+        th, td { padding: .78rem .75rem; border-bottom: 1px solid var(--line); text-align: left; vertical-align: middle; }
+        th { color: var(--muted); font-size: .76rem; letter-spacing: .05em; text-transform: uppercase; }
+        tbody tr:last-child td { border-bottom: 0; }
+        .badge { display: inline-flex; align-items: center; border-radius: 99px; padding: .25rem .55rem; font-size: .79rem; font-weight: 750; white-space: nowrap; }
+        .badge-good { color: var(--green); background: var(--mint); }
+        .badge-low { color: var(--red); background: var(--red-bg); }
+        .badge-neutral { color: #475569; background: #eef2f7; }
+        .flash { margin: 0 0 1rem; border-radius: 10px; padding: .75rem 1rem; }
+        .flash-success { color: var(--green); background: var(--mint); }
+        .flash-error { color: var(--red); background: var(--red-bg); }
+        .empty { padding: 2rem 1rem; color: var(--muted); text-align: center; }
+        .actions { display: flex; align-items: center; justify-content: flex-end; gap: .4rem; white-space: nowrap; }
+        .actions form { margin: 0; }
+        .split { display: grid; grid-template-columns: minmax(280px, .75fr) minmax(0, 1.5fr); gap: 1rem; align-items: start; }
+        .section-title { display: flex; align-items: center; justify-content: space-between; gap: .75rem; margin-bottom: .8rem; }
+        .section-title h2 { margin: 0; }
+        .auth-shell { display: grid; min-height: 75vh; place-items: center; }
+        .auth-card { width: min(440px, 100%); padding: 2rem; }
+        .auth-mark { display: grid; width: 56px; height: 56px; margin-bottom: 1.1rem; place-items: center; border-radius: 18px; background: #e8edff; font-size: 1.7rem; }
+        .auth-card h1 { font-size: 1.65rem; }
+        .form-footer { display: flex; justify-content: flex-end; flex-wrap: wrap; gap: .6rem; margin-top: 1.2rem; }
+        footer { padding: 1rem; color: var(--muted); text-align: center; font-size: .83rem; }
+        @media (max-width: 760px) {
+            header { position: static; align-items: flex-start; flex-direction: column; padding: .8rem 1rem; }
+            nav { width: 100%; }
+            nav a, .nav-button { padding: .5rem .55rem; font-size: .84rem; }
+            .user-menu { margin-left: auto; }
+            main { margin-top: 1.2rem; }
+            .metrics { grid-template-columns: 1fr; }
+            .metric { min-height: auto; }
+            .page-heading { align-items: flex-start; flex-direction: column; }
+            .split { grid-template-columns: 1fr; }
         }
-
-        .badge-success {
-            background-color: #d1fae5;
-            color: #065f46;
-            padding: 0.25rem 0.5rem;
-            border-radius: 4px;
-            font-weight: 600;
-            font-size: 0.85rem;
+        @media (max-width: 500px) {
+            .form-grid { grid-template-columns: 1fr; gap: 0; }
+            .card { padding: 1rem; }
+            th, td { padding: .65rem .55rem; }
         }
     </style>
 </head>
 <body>
+    {% if usuario_actual %}
     <header>
-        <h1>📦 STOCK DE AGUSTIN</h1>
-        <nav>
-            <a href="/">Dashboard</a>
-            <a href="/productos">Inventario</a>
+        <a class="brand" href="{{ url_for('index') }}">
+            <span class="brand-icon">📦</span>
+            <span><strong>Stock Claro</strong><small>Tu inventario, al día</small></span>
+        </a>
+        <nav aria-label="Navegación principal">
+            <a href="{{ url_for('index') }}">Inicio</a>
+            <a href="{{ url_for('productos') }}">Productos</a>
+            <a href="{{ url_for('movimientos') }}">Compras y ventas</a>
+            <a href="{{ url_for('exportar_movimientos') }}">Reporte</a>
+            {% if rol_actual == 'admin' %}
+            <a href="{{ url_for('usuarios') }}">Equipo</a>
+            <a href="{{ url_for('ubicaciones') }}">Depósitos</a>
+            {% endif %}
+            <span class="user-menu">
+                {{ usuario_actual }}
+                <form action="{{ url_for('salir') }}" method="post">
+                    <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+                    <button class="nav-button" type="submit">Salir</button>
+                </form>
+            </span>
         </nav>
     </header>
-
-    <div class="container">
+    {% endif %}
+    <main>
+        {% with mensajes = get_flashed_messages(with_categories=true) %}
+            {% for categoria, mensaje in mensajes %}
+            <div class="flash flash-{{ categoria }}">{{ mensaje }}</div>
+            {% endfor %}
+        {% endwith %}
         {% block content %}{% endblock %}
-    </div>
+    </main>
+    {% if usuario_actual %}<footer>Simple para usar. Listo para crecer. ✨</footer>{% endif %}
 </body>
 </html>

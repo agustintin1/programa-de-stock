@@ -1,0 +1,55 @@
+{% extends 'base.html' %}
+{% block title %}Equipo · Stock Claro{% endblock %}
+{% block content %}
+<div class="page-heading">
+    <div><h1>Tu equipo 👥</h1><p>Cada persona entra con su propia cuenta; las acciones quedan registradas.</p></div>
+</div>
+<div class="split">
+    <section class="card">
+        <h2>Invitar a alguien</h2>
+        <form method="post">
+            <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+            <div class="field">
+                <label for="nombre">Nombre</label>
+                <input id="nombre" name="nombre" maxlength="120" required autofocus>
+            </div>
+            <div class="field">
+                <label for="usuario">Usuario para ingresar</label>
+                <input id="usuario" name="usuario" minlength="3" maxlength="80" autocomplete="off" required>
+            </div>
+            <div class="field">
+                <label for="password">Contraseña inicial</label>
+                <input id="password" type="password" name="password" minlength="12" autocomplete="new-password" required>
+                <span class="hint">Debe tener al menos 12 caracteres. Compártela con cuidado.</span>
+            </div>
+            <div class="field">
+                <label for="rol">Permisos</label>
+                <select id="rol" name="rol" required>
+                    <option value="operador">Operador · inventario y movimientos</option>
+                    <option value="admin">Administrador · también gestiona equipo y depósitos</option>
+                </select>
+            </div>
+            <button class="btn" type="submit">＋ Crear cuenta</button>
+        </form>
+    </section>
+    <section class="card">
+        <h2>Cuentas del equipo</h2>
+        <div class="table-wrap">
+            <table>
+                <thead><tr><th>Persona</th><th>Usuario</th><th>Permisos</th></tr></thead>
+                <tbody>
+                    {% for u in usuarios %}
+                    <tr>
+                        <td><strong>{{ u['nombre'] }}</strong></td>
+                        <td>{{ u['usuario'] }}</td>
+                        <td><span class="badge badge-neutral">{{ 'Administrador' if u['rol'] == 'admin' else 'Operador' }}</span></td>
+                    </tr>
+                    {% else %}
+                    <tr><td class="empty" colspan="3">Todavía no hay usuarios.</td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </section>
+</div>
+{% endblock %}

@@ -1,0 +1,35 @@
+{% extends 'base.html' %}
+{% block title %}Depósitos · Stock Claro{% endblock %}
+{% block content %}
+<div class="page-heading">
+    <div><h1>Depósitos y sucursales 🏬</h1><p>Se empieza con un depósito y puedes sumar ubicaciones cuando las necesites.</p></div>
+</div>
+<div class="split">
+    <section class="card">
+        <h2>Agregar ubicación</h2>
+        <form method="post">
+            <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+            <div class="field">
+                <label for="nombre">Nombre del depósito o sucursal</label>
+                <input id="nombre" name="nombre" maxlength="120" placeholder="Ej.: Sucursal Centro" required autofocus>
+            </div>
+            <button class="btn" type="submit">＋ Crear ubicación</button>
+        </form>
+    </section>
+    <section class="card">
+        <h2>Ubicaciones</h2>
+        <div class="table-wrap">
+            <table>
+                <thead><tr><th>Nombre</th><th>Estado</th></tr></thead>
+                <tbody>
+                    {% for u in ubicaciones %}
+                    <tr><td><strong>{{ u['nombre'] }}</strong></td><td><span class="badge badge-good">Activa</span></td></tr>
+                    {% else %}
+                    <tr><td class="empty" colspan="2">Todavía no hay ubicaciones.</td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </section>
+</div>
+{% endblock %}

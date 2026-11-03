@@ -1,55 +1,78 @@
 {% extends 'base.html' %}
-
-{% block title %}Dashboard - Control de Stock{% endblock %}
-
+{% block title %}Inicio · Stock Claro{% endblock %}
 {% block content %}
-<h2 style="margin-bottom: 1.5rem;">Resumen de Inventario 📊</h2>
-
-<!-- Tarjetas de métricas principales -->
-<div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 1.5rem; margin-bottom: 2rem;">
-    <div class="card" style="text-align: center;">
-        <span style="font-size: 2.25rem; font-weight: 700; color: var(--accent);">{{ total_productos }}</span>
-        <h4 style="margin: 0.5rem 0 0 0;">Total Productos</h4>
+<div class="page-heading">
+    <div>
+        <h1>Hola, {{ usuario_actual }} 👋</h1>
+        <p>Este es el resumen de cómo va tu inventario hoy.</p>
     </div>
-    
-    <div class="card" style="text-align: center;">
-        <span style="font-size: 2.25rem; font-weight: 700; color: var(--success);">${{ "{:,.2f}".format(valor_total) }}</span>
-        <h4 style="margin: 0.5rem 0 0 0;">Valor del Inventario</h4>
-    </div>
-
-    <div class="card" style="text-align: center;">
-        <span style="font-size: 2.25rem; font-weight: 700; color: var(--danger);">{{ stock_critico }}</span>
-        <h4 style="margin: 0.5rem 0 0 0;">Stock Crítico (≤ 5)</h4>
-    </div>
+    <a class="btn" href="{{ url_for('nuevo_producto') }}">＋ Agregar producto</a>
 </div>
 
-<div class="card">
-    <h3 style="margin-top: 0; color: var(--primary);">Últimos Productos Ingresados</h3>
-    <table>
-        <thead>
-            <tr>
-                <th>Producto</th>
-                <th>Categoría</th>
-                <th>Precio</th>
-                <th>Stock</th>
-            </tr>
-        </thead>
-        <tbody>
-            {% for p in productos %}
-            <tr>
-                <td style="font-weight: 600;">{{ p['nombre'] }}</td>
-                <td>{{ p['categoria'] }}</td>
-                <td>${{ "{:,.2f}".format(p['precio']) }}</td>
-                <td>
-                    {% if p['stock'] <= 5 %}
-                        <span class="badge-danger">{{ p['stock'] }} un. (Bajo)</span>
-                    {% else %}
-                        <span class="badge-success">{{ p['stock'] }} un.</span>
-                    {% endif %}
-                </td>
-            </tr>
-            {% endfor %}
-        </tbody>
-    </table>
-</div>
+<section class="grid metrics" aria-label="Resumen del inventario">
+    <article class="card metric">
+        <span class="metric-label">Productos activos</span>
+        <strong class="metric-value">{{ total_productos }}</strong>
+    </article>
+    <article class="card metric">
+        <span class="metric-label">Valor estimado del stock</span>
+        <strong class="metric-value">${{ "{:,.2f}".format(valor_total) }}</strong>
+    </article>
+    <article class="card metric">
+        <span class="metric-label">Alertas de stock bajo</span>
+        <strong class="metric-value">{{ stock_critico }}</strong>
+    </article>
+</section>
+
+<section class="card">
+    <div class="section-title">
+        <h2>Actividad reciente</h2>
+        <a href="{{ url_for('movimientos') }}">Ver compras y ventas →</a>
+    </div>
+    <div class="table-wrap">
+        <table>
+            <thead>
+                <tr><th>Qué pasó</th><th>Producto</th><th>Depósito</th><th>Cantidad</th><th>Quién</th><th>Cuándo</th></tr>
+            </thead>
+            <tbody>
+                {% for m in movimientos %}
+                <tr>
+                    <td><span class="badge badge-neutral">{{ m['tipo'].replace('_', ' ') }}</span></td>
+                    <td><strong>{{ m['producto'] }}</strong></td>
+                    <td>{{ m['ubicacion'] }}</td>
+                    <td>{{ m['cantidad'] }} un.</td>
+                    <td>{{ m['usuario'] }}</td>
+                    <td>{{ m['creado_en'] }}</td>
+                </tr>
+                {% else %}
+                <tr><td class="empty" colspan="6">Todavía no hay movimientos. Cuando registres una compra o venta, aparecerá acá.</td></tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</section>
+
+<section class="card" style="margin-top:1rem">
+    <div class="section-title">
+        <h2>Para reponer 🔔</h2>
+        <a href="{{ url_for('productos') }}">Revisar inventario →</a>
+    </div>
+    <div class="table-wrap">
+        <table>
+            <thead><tr><th>Producto</th><th>Depósito</th><th>Disponible</th><th>Mínimo</th></tr></thead>
+            <tbody>
+                {% for p in productos_bajos %}
+                <tr>
+                    <td><strong>{{ p['producto'] }}</strong></td>
+                    <td>{{ p['ubicacion'] }}</td>
+                    <td><span class="badge badge-low">{{ p['cantidad'] }} un.</span></td>
+                    <td>{{ p['stock_minimo'] }} un.</td>
+                </tr>
+                {% else %}
+                <tr><td class="empty" colspan="4">¡Todo en orden! No hay productos bajo su mínimo. ✨</td></tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</section>
 {% endblock %}

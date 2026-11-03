@@ -1,0 +1,28 @@
+{% extends 'base.html' %}
+{% block title %}Primeros pasos · Stock Claro{% endblock %}
+{% block content %}
+<div class="auth-shell">
+    <section class="card auth-card">
+        <div class="auth-mark">🚀</div>
+        <h1>¡Empecemos!</h1>
+        <p class="muted">Crea la cuenta administradora. Después podrás invitar a tu equipo.</p>
+        <form method="post">
+            <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+            <div class="field">
+                <label for="nombre">Tu nombre</label>
+                <input id="nombre" name="nombre" autocomplete="name" required autofocus>
+            </div>
+            <div class="field">
+                <label for="usuario">Elige un usuario</label>
+                <input id="usuario" name="usuario" minlength="3" autocomplete="username" required>
+            </div>
+            <div class="field">
+                <label for="password">Crea una contraseña</label>
+                <input id="password" type="password" name="password" minlength="12" autocomplete="new-password" required>
+                <span class="hint">Usa al menos 12 caracteres.</span>
+            </div>
+            <button class="btn" type="submit" style="width:100%">Crear mi cuenta →</button>
+        </form>
+    </section>
+</div>
+{% endblock %}
