@@ -1,12 +1,15 @@
-from flask import Flask, render_template, request, redirect, url_for, flash
 import os
 import sqlite3
+from flask import Flask, flash, redirect, render_template, request
 
+# Blindaje absoluto para importación de PostgreSQL
 try:
   import psycopg2
   import psycopg2.extras
+
+  POSTGRES_DISPONIBLE = True
 except ImportError:
-  pass
+  POSTGRES_DISPONIBLE = False
 
 app = Flask(__name__)
 app.secret_key = 'clave_secreta_stock'
@@ -20,12 +23,15 @@ if database_url:
 
 
 def obtener_conexion():
-  if database_url:
-    # Usamos DictCursor para soportar tanto índices [0] como nombres de columnas
-    conexion = psycopg2.connect(
-        database_url, cursor_factory=psycopg2.extras.DictCursor
-    )
-    return conexion
+  if database_url and POSTGRES_DISPONIBLE:
+    try:
+      conexion = psycopg2.connect(
+          database_url, cursor_factory=psycopg2.extras.DictCursor
+      )
+      return conexion
+    except Exception as e:
+      print(f'ERROR CRITICO DE CONEXION POSTGRES: {e}')
+      raise
   else:
     conexion = sqlite3.connect('stock.db')
     conexion.row_factory = sqlite3.Row
@@ -34,34 +40,37 @@ def obtener_conexion():
 
 # Función automática para asegurar que la tabla productos exista siempre
 def inicializar_base_datos():
-  conexion = obtener_conexion()
-  cursor = conexion.cursor()
+  try:
+    conexion = obtener_conexion()
+    cursor = conexion.cursor()
 
-  if database_url:
-    cursor.execute('''
-            CREATE TABLE IF NOT EXISTS productos (
-                id SERIAL PRIMARY KEY,
-                nombre VARCHAR(150) NOT NULL,
-                descripcion TEXT,
-                precio NUMERIC(10, 2) NOT NULL,
-                stock INT NOT NULL,
-                categoria VARCHAR(100) NOT NULL
-            )
-        ''')
-  else:
-    cursor.execute('''
-            CREATE TABLE IF NOT EXISTS productos (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                nombre TEXT NOT NULL,
-                descripcion TEXT,
-                precio REAL NOT NULL,
-                stock INTEGER NOT NULL,
-                categoria TEXT NOT NULL
-            )
-        ''')
+    if database_url and POSTGRES_DISPONIBLE:
+      cursor.execute('''
+                CREATE TABLE IF NOT EXISTS productos (
+                    id SERIAL PRIMARY KEY,
+                    nombre VARCHAR(150) NOT NULL,
+                    descripcion TEXT,
+                    precio NUMERIC(10, 2) NOT NULL,
+                    stock INT NOT NULL,
+                    categoria VARCHAR(100) NOT NULL
+                )
+            ''')
+    else:
+      cursor.execute('''
+                CREATE TABLE IF NOT EXISTS productos (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    nombre TEXT NOT NULL,
+                    descripcion TEXT,
+                    precio REAL NOT NULL,
+                    stock INTEGER NOT NULL,
+                    categoria TEXT NOT NULL
+                )
+            ''')
 
-  conexion.commit()
-  conexion.close()
+    conexion.commit()
+    conexion.close()
+  except Exception as e:
+    print(f'Error al inicializar la base de datos: {e}')
 
 
 # Ejecutamos la inicialización al arrancar la app
@@ -112,7 +121,7 @@ def productos():
             WHERE nombre ILIKE %s OR categoria ILIKE %s 
             ORDER BY nombre ASC
         '''
-        if database_url
+        if database_url and POSTGRES_DISPONIBLE
         else '''
             SELECT * FROM productos 
             WHERE nombre LIKE ? OR categoria LIKE ? 
@@ -149,7 +158,7 @@ def nuevo_producto():
             INSERT INTO productos (nombre, descripcion, precio, stock, categoria)
             VALUES (%s, %s, %s, %s, %s)
         '''
-        if database_url
+        if database_url and POSTGRES_DISPONIBLE
         else '''
             INSERT INTO productos (nombre, descripcion, precio, stock, categoria)
             VALUES (?, ?, ?, ?, ?)
@@ -183,7 +192,7 @@ def editar_producto(id):
             SET nombre = %s, descripcion = %s, precio = %s, stock = %s, categoria = %s
             WHERE id = %s
         '''
-        if database_url
+        if database_url and POSTGRES_DISPONIBLE
         else '''
             UPDATE productos 
             SET nombre = ?, descripcion = ?, precio = ?, stock = ?, categoria = ?
@@ -201,7 +210,7 @@ def editar_producto(id):
 
   query_select = (
       'SELECT * FROM productos WHERE id = %s'
-      if database_url
+      if database_url and POSTGRES_DISPONIBLE
       else 'SELECT * FROM productos WHERE id = ?'
   )
   cursor.execute(query_select, (id,))
@@ -220,14 +229,14 @@ def ajustar_stock(id, accion):
   if accion == 'sumar':
     query = (
         'UPDATE productos SET stock = stock + 1 WHERE id = %s'
-        if database_url
+        if database_url and POSTGRES_DISPONIBLE
         else 'UPDATE productos SET stock = stock + 1 WHERE id = ?'
     )
     cursor.execute(query, (id,))
   elif accion == 'restar':
     query = (
         'UPDATE productos SET stock = GREATEST(0, stock - 1) WHERE id = %s'
-        if database_url
+        if database_url and POSTGRES_DISPONIBLE
         else (
             'UPDATE productos SET stock = MAX(0, stock - 1) WHERE id = ?'
         )
@@ -247,7 +256,7 @@ def eliminar_producto(id):
   cursor = conexion.cursor()
   query = (
       'DELETE FROM productos WHERE id = %s'
-      if database_url
+      if database_url and POSTGRES_DISPONIBLE
       else 'DELETE FROM productos WHERE id = ?'
   )
   cursor.execute(query, (id,))
