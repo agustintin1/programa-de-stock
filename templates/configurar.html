@@ -3,9 +3,9 @@
 {% block content %}
 <div class="auth-shell">
     <section class="card auth-card">
-        <div class="auth-mark">🚀</div>
+        <div class="auth-brand"><span class="auth-mark">🚀</span><span><strong>Stock Claro</strong><small>Tu inventario, al día</small></span></div>
         <h1>¡Empecemos!</h1>
-        <p class="muted">Crea la cuenta administradora. Después podrás invitar a tu equipo.</p>
+        <p class="muted">Un primer paso y ya tienes tu inventario en marcha.</p>
         <form method="post">
             <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
             <div class="field">
@@ -21,7 +21,7 @@
                 <input id="password" type="password" name="password" minlength="12" autocomplete="new-password" required>
                 <span class="hint">Usa al menos 12 caracteres.</span>
             </div>
-            <button class="btn" type="submit" style="width:100%">Crear mi cuenta →</button>
+            <button class="btn" type="submit" style="width:100%">Crear mi cuenta y empezar →</button>
         </form>
     </section>
 </div>

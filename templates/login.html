@@ -3,9 +3,9 @@
 {% block content %}
 <div class="auth-shell">
     <section class="card auth-card">
-        <div class="auth-mark">👋</div>
+        <div class="auth-brand"><span class="auth-mark">👋</span><span><strong>Stock Claro</strong><small>Tu inventario, al día</small></span></div>
         <h1>¡Qué bueno verte!</h1>
-        <p class="muted">Ingresa para revisar y mover el inventario.</p>
+        <p class="muted">Ponte cómodo. Tu inventario te está esperando.</p>
         <form method="post">
             <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
             <div class="field">
@@ -16,8 +16,9 @@
                 <label for="password">Contraseña</label>
                 <input id="password" type="password" name="password" autocomplete="current-password" required>
             </div>
-            <button class="btn" type="submit" style="width:100%">Ingresar →</button>
+            <button class="btn" type="submit" style="width:100%">Ingresar y empezar →</button>
         </form>
+        <p class="auth-note">🔒 Un espacio seguro para ti y tu equipo.</p>
     </section>
 </div>
 {% endblock %}

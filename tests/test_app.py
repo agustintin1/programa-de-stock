@@ -207,7 +207,7 @@ class InventarioTest(unittest.TestCase):
         self.cliente.post('/productos/eliminar/1').status_code, 400
     )
     respuesta = self.cliente.get('/')
-    self.assertIn('Para reponer', respuesta.get_data(as_text=True))
+    self.assertIn('Un ojito a estas cositas', respuesta.get_data(as_text=True))
     self.assertIn('Producto anterior', respuesta.get_data(as_text=True))
     self.assertIn('Producto con código', respuesta.get_data(as_text=True))
 

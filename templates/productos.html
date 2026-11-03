@@ -20,7 +20,7 @@
                 <option value="{{ ubicacion['id'] }}" {% if ubicacion['id'] == ubicacion_id %}selected{% endif %}>{{ ubicacion['nombre'] }}</option>
                 {% endfor %}
             </select>
-            <button class="btn" type="submit">Buscar</button>
+            <button class="btn" type="submit">🔎 Buscar</button>
             {% if busqueda %}<a class="btn btn-secondary" href="{{ url_for('productos', ubicacion_id=ubicacion_id) }}">Limpiar</a>{% endif %}
         </form>
     </div>
@@ -36,7 +36,7 @@
                 {% for p in productos %}
                 <tr>
                     <td><strong>{{ p['nombre'] }}</strong></td>
-                    <td>{{ p['categoria'] }}{% if p['codigo_barras'] %}<br><span class="muted">{{ p['codigo_barras'] }}</span>{% endif %}</td>
+                    <td><span class="badge badge-neutral">{{ p['categoria'] }}</span>{% if p['codigo_barras'] %}<br><span class="muted">{{ p['codigo_barras'] }}</span>{% endif %}</td>
                     <td>${{ "{:,.2f}".format(p['precio']) }}</td>
                     <td>
                         {% if p['stock'] <= p['stock_minimo'] %}
