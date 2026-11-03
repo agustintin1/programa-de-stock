@@ -21,8 +21,9 @@ if database_url:
 
 def obtener_conexion():
   if database_url:
+    # Usamos DictCursor para soportar tanto índices [0] como nombres de columnas
     conexion = psycopg2.connect(
-        database_url, cursor_factory=psycopg2.extras.RealDictCursor
+        database_url, cursor_factory=psycopg2.extras.DictCursor
     )
     return conexion
   else:
@@ -37,7 +38,6 @@ def inicializar_base_datos():
   cursor = conexion.cursor()
 
   if database_url:
-    # Sintaxis profesional para PostgreSQL
     cursor.execute('''
             CREATE TABLE IF NOT EXISTS productos (
                 id SERIAL PRIMARY KEY,
@@ -49,7 +49,6 @@ def inicializar_base_datos():
             )
         ''')
   else:
-    # Sintaxis para SQLite local
     cursor.execute('''
             CREATE TABLE IF NOT EXISTS productos (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
