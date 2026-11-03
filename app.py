@@ -1,8 +1,7 @@
 import os
 import sqlite3
-from flask import Flask, flash, redirect, render_template, request
+from flask import Flask, flash, redirect, render_template, request, url_for
 
-# Blindaje absoluto para importación de PostgreSQL
 try:
   import psycopg2
   import psycopg2.extras
@@ -24,14 +23,10 @@ if database_url:
 
 def obtener_conexion():
   if database_url and POSTGRES_DISPONIBLE:
-    try:
-      conexion = psycopg2.connect(
-          database_url, cursor_factory=psycopg2.extras.DictCursor
-      )
-      return conexion
-    except Exception as e:
-      print(f'ERROR CRITICO DE CONEXION POSTGRES: {e}')
-      raise
+    conexion = psycopg2.connect(
+        database_url, cursor_factory=psycopg2.extras.DictCursor
+    )
+    return conexion
   else:
     conexion = sqlite3.connect('stock.db')
     conexion.row_factory = sqlite3.Row
@@ -140,15 +135,21 @@ def productos():
   )
 
 
-# Alta de nuevo producto
+# Alta de nuevo producto con manejo seguro de tipos
 @app.route('/productos/nuevo', methods=['GET', 'POST'])
 def nuevo_producto():
   if request.method == 'POST':
-    nombre = request.form['nombre']
-    descripcion = request.form['descripcion']
-    precio = float(request.form['precio'])
-    stock = int(request.form['stock'])
-    categoria = request.form['categoria']
+    nombre = request.form.get('nombre', '').strip()
+    descripcion = request.form.get('descripcion', '').strip()
+    try:
+      precio = float(request.form.get('precio', 0))
+    except ValueError:
+      precio = 0.0
+    try:
+      stock = int(request.form.get('stock', 0))
+    except ValueError:
+      stock = 0
+    categoria = request.form.get('categoria', '').strip()
 
     conexion = obtener_conexion()
     cursor = conexion.cursor()
@@ -174,17 +175,24 @@ def nuevo_producto():
   return render_template('nuevo_producto.html')
 
 
+# Edición segura de producto con validación de existencia
 @app.route('/productos/editar/<int:id>', methods=['GET', 'POST'])
 def editar_producto(id):
   conexion = obtener_conexion()
   cursor = conexion.cursor()
 
   if request.method == 'POST':
-    nombre = request.form['nombre']
-    descripcion = request.form['descripcion']
-    precio = float(request.form['precio'])
-    stock = int(request.form['stock'])
-    categoria = request.form['categoria']
+    nombre = request.form.get('nombre', '').strip()
+    descripcion = request.form.get('descripcion', '').strip()
+    try:
+      precio = float(request.form.get('precio', 0))
+    except ValueError:
+      precio = 0.0
+    try:
+      stock = int(request.form.get('stock', 0))
+    except ValueError:
+      stock = 0
+    categoria = request.form.get('categoria', '').strip()
 
     query = (
         '''
@@ -216,6 +224,10 @@ def editar_producto(id):
   cursor.execute(query_select, (id,))
   producto = cursor.fetchone()
   conexion.close()
+
+  if not producto:
+    flash('El producto no existe.')
+    return redirect(url_for('productos'))
 
   return render_template('editar_producto.html', producto=producto)
 
