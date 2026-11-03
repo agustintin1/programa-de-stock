@@ -2,8 +2,6 @@ from flask import Flask, render_template, request, redirect, url_for, flash
 import os
 import sqlite3
 
-# Intentamos importar psycopg2 o manejar la conexión según corresponda
-# Flask-SQLAlchemy o manejo nativo con adaptadores estándar
 try:
   import psycopg2
   import psycopg2.extras
@@ -13,10 +11,7 @@ except ImportError:
 app = Flask(__name__)
 app.secret_key = 'clave_secreta_stock'
 
-# ==========================================
-# CONFIGURACIÓN INTELIGENTE DE BASE DE DATOS
-# (PostgreSQL en Render / SQLite local)
-# ==========================================
+# Configuración de base de datos
 database_url = os.environ.get('DATABASE_URL')
 
 if database_url:
@@ -26,14 +21,52 @@ if database_url:
 
 def obtener_conexion():
   if database_url:
-    # Conexión profesional a PostgreSQL en la nube de Render
-    conexion = psycopg2.connect(database_url, cursor_factory=psycopg2.extras.RealDictCursor)
+    conexion = psycopg2.connect(
+        database_url, cursor_factory=psycopg2.extras.RealDictCursor
+    )
     return conexion
   else:
-    # Conexión local a SQLite para desarrollo en tu Lenovo
     conexion = sqlite3.connect('stock.db')
-    conexion.row_factory = sqlite3.Row  # Permite acceder a las columnas por nombre
+    conexion.row_factory = sqlite3.Row
     return conexion
+
+
+# Función automática para asegurar que la tabla productos exista siempre
+def inicializar_base_datos():
+  conexion = obtener_conexion()
+  cursor = conexion.cursor()
+
+  if database_url:
+    # Sintaxis profesional para PostgreSQL
+    cursor.execute('''
+            CREATE TABLE IF NOT EXISTS productos (
+                id SERIAL PRIMARY KEY,
+                nombre VARCHAR(150) NOT NULL,
+                descripcion TEXT,
+                precio NUMERIC(10, 2) NOT NULL,
+                stock INT NOT NULL,
+                categoria VARCHAR(100) NOT NULL
+            )
+        ''')
+  else:
+    # Sintaxis para SQLite local
+    cursor.execute('''
+            CREATE TABLE IF NOT EXISTS productos (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                nombre TEXT NOT NULL,
+                descripcion TEXT,
+                precio REAL NOT NULL,
+                stock INTEGER NOT NULL,
+                categoria TEXT NOT NULL
+            )
+        ''')
+
+  conexion.commit()
+  conexion.close()
+
+
+# Ejecutamos la inicialización al arrancar la app
+inicializar_base_datos()
 
 
 # Dashboard Principal
@@ -42,7 +75,6 @@ def index():
   conexion = obtener_conexion()
   cursor = conexion.cursor()
 
-  # Métricas del inventario
   cursor.execute('SELECT COUNT(*) FROM productos')
   total_productos = cursor.fetchone()[0]
 
@@ -50,11 +82,9 @@ def index():
   resultado_valor = cursor.fetchone()[0]
   valor_total = resultado_valor if resultado_valor is not None else 0
 
-  # Productos con stock bajo (menor o igual a 5 unidades)
   cursor.execute('SELECT COUNT(*) FROM productos WHERE stock <= 5')
   stock_critico = cursor.fetchone()[0]
 
-  # Obtener últimos productos agregados
   cursor.execute('SELECT * FROM productos ORDER BY id DESC LIMIT 5')
   ultimos_productos = cursor.fetchall()
 
@@ -77,15 +107,19 @@ def productos():
   cursor = conexion.cursor()
 
   if busqueda:
-    query = '''
+    query = (
+        '''
             SELECT * FROM productos 
-            WHERE nombre LIKE %s OR categoria %s 
+            WHERE nombre ILIKE %s OR categoria ILIKE %s 
             ORDER BY nombre ASC
-        ''' if database_url else '''
+        '''
+        if database_url
+        else '''
             SELECT * FROM productos 
             WHERE nombre LIKE ? OR categoria LIKE ? 
             ORDER BY nombre ASC
         '''
+    )
     cursor.execute(query, (f'%{busqueda}%', f'%{busqueda}%'))
   else:
     cursor.execute('SELECT * FROM productos ORDER BY nombre ASC')
@@ -111,13 +145,17 @@ def nuevo_producto():
     conexion = obtener_conexion()
     cursor = conexion.cursor()
 
-    query = '''
+    query = (
+        '''
             INSERT INTO productos (nombre, descripcion, precio, stock, categoria)
             VALUES (%s, %s, %s, %s, %s)
-        ''' if database_url else '''
+        '''
+        if database_url
+        else '''
             INSERT INTO productos (nombre, descripcion, precio, stock, categoria)
             VALUES (?, ?, ?, ?, ?)
         '''
+    )
     cursor.execute(query, (nombre, descripcion, precio, stock, categoria))
     conexion.commit()
     conexion.close()
@@ -140,15 +178,19 @@ def editar_producto(id):
     stock = int(request.form['stock'])
     categoria = request.form['categoria']
 
-    query = '''
+    query = (
+        '''
             UPDATE productos 
             SET nombre = %s, descripcion = %s, precio = %s, stock = %s, categoria = %s
             WHERE id = %s
-        ''' if database_url else '''
+        '''
+        if database_url
+        else '''
             UPDATE productos 
             SET nombre = ?, descripcion = ?, precio = ?, stock = ?, categoria = ?
             WHERE id = ?
         '''
+    )
     cursor.execute(
         query, (nombre, descripcion, precio, stock, categoria, id)
     )
