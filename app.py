@@ -1,5 +1,6 @@
 import os
 import sqlite3
+import traceback
 from flask import Flask, flash, redirect, render_template, request, url_for
 
 try:
@@ -75,146 +76,165 @@ inicializar_base_datos()
 # Dashboard Principal
 @app.route('/')
 def index():
-  conexion = obtener_conexion()
-  cursor = conexion.cursor()
+  try:
+    conexion = obtener_conexion()
+    cursor = conexion.cursor()
 
-  cursor.execute('SELECT COUNT(*) FROM productos')
-  total_productos = cursor.fetchone()[0]
+    cursor.execute('SELECT COUNT(*) FROM productos')
+    total_productos = cursor.fetchone()[0]
 
-  cursor.execute('SELECT SUM(precio * stock) FROM productos')
-  resultado_valor = cursor.fetchone()[0]
-  valor_total = resultado_valor if resultado_valor is not None else 0
+    cursor.execute('SELECT SUM(precio * stock) FROM productos')
+    resultado_valor = cursor.fetchone()[0]
+    valor_total = resultado_valor if resultado_valor is not None else 0
 
-  cursor.execute('SELECT COUNT(*) FROM productos WHERE stock <= 5')
-  stock_critico = cursor.fetchone()[0]
+    cursor.execute('SELECT COUNT(*) FROM productos WHERE stock <= 5')
+    stock_critico = cursor.fetchone()[0]
 
-  cursor.execute('SELECT * FROM productos ORDER BY id DESC LIMIT 5')
-  ultimos_productos = cursor.fetchall()
+    cursor.execute('SELECT * FROM productos ORDER BY id DESC LIMIT 5')
+    ultimos_productos = cursor.fetchall()
 
-  conexion.close()
+    conexion.close()
 
-  return render_template(
-      'index.html',
-      total_productos=total_productos,
-      valor_total=valor_total,
-      stock_critico=stock_critico,
-      productos=ultimos_productos,
-  )
+    return render_template(
+        'index.html',
+        total_productos=total_productos,
+        valor_total=valor_total,
+        stock_critico=stock_critico,
+        productos=ultimos_productos,
+    )
+  except Exception as e:
+    print('ERROR EN INDEX:')
+    traceback.print_exc()
+    raise
 
 
 # Listado completo de inventario con Búsqueda
 @app.route('/productos')
 def productos():
-  busqueda = request.args.get('busqueda', '')
-  conexion = obtener_conexion()
-  cursor = conexion.cursor()
-
-  if busqueda:
-    query = (
-        '''
-            SELECT * FROM productos 
-            WHERE nombre ILIKE %s OR categoria ILIKE %s 
-            ORDER BY nombre ASC
-        '''
-        if database_url and POSTGRES_DISPONIBLE
-        else '''
-            SELECT * FROM productos 
-            WHERE nombre LIKE ? OR categoria LIKE ? 
-            ORDER BY nombre ASC
-        '''
-    )
-    cursor.execute(query, (f'%{busqueda}%', f'%{busqueda}%'))
-  else:
-    cursor.execute('SELECT * FROM productos ORDER BY nombre ASC')
-
-  lista_productos = cursor.fetchall()
-  conexion.close()
-
-  return render_template(
-      'productos.html', productos=lista_productos, busqueda=busqueda
-  )
-
-
-# Alta de nuevo producto con manejo seguro de tipos
-@app.route('/productos/nuevo', methods=['GET', 'POST'])
-def nuevo_producto():
-  if request.method == 'POST':
-    nombre = request.form.get('nombre', '').strip()
-    descripcion = request.form.get('descripcion', '').strip()
-    try:
-      precio = float(request.form.get('precio', 0))
-    except ValueError:
-      precio = 0.0
-    try:
-      stock = int(request.form.get('stock', 0))
-    except ValueError:
-      stock = 0
-    categoria = request.form.get('categoria', '').strip()
-
+  try:
+    busqueda = request.args.get('busqueda', '')
     conexion = obtener_conexion()
     cursor = conexion.cursor()
 
-    query = (
-        '''
-            INSERT INTO productos (nombre, descripcion, precio, stock, categoria)
-            VALUES (%s, %s, %s, %s, %s)
-        '''
-        if database_url and POSTGRES_DISPONIBLE
-        else '''
-            INSERT INTO productos (nombre, descripcion, precio, stock, categoria)
-            VALUES (?, ?, ?, ?, ?)
-        '''
-    )
-    cursor.execute(query, (nombre, descripcion, precio, stock, categoria))
-    conexion.commit()
+    if busqueda:
+      query = (
+          '''
+                SELECT * FROM productos 
+                WHERE nombre ILIKE %s OR categoria ILIKE %s 
+                ORDER BY nombre ASC
+            '''
+          if database_url and POSTGRES_DISPONIBLE
+          else '''
+                SELECT * FROM productos 
+                WHERE nombre LIKE ? OR categoria LIKE ? 
+                ORDER BY nombre ASC
+            '''
+      )
+      cursor.execute(query, (f'%{busqueda}%', f'%{busqueda}%'))
+    else:
+      cursor.execute('SELECT * FROM productos ORDER BY nombre ASC')
+
+    lista_productos = cursor.fetchall()
     conexion.close()
 
-    flash('¡Producto registrado con éxito!')
-    return redirect(url_for('productos'))
+    return render_template(
+        'productos.html', productos=lista_productos, busqueda=busqueda
+    )
+  except Exception as e:
+    print('ERROR EN PRODUCTOS:')
+    traceback.print_exc()
+    raise
+
+
+# Alta de nuevo producto con manejo seguro y traza de error explícita
+@app.route('/productos/nuevo', methods=['GET', 'POST'])
+def nuevo_producto():
+  if request.method == 'POST':
+    try:
+      nombre = request.form.get('nombre', '').strip()
+      descripcion = request.form.get('descripcion', '').strip()
+      try:
+        precio = float(request.form.get('precio', 0))
+      except ValueError:
+        precio = 0.0
+      try:
+        stock = int(request.form.get('stock', 0))
+      except ValueError:
+        stock = 0
+      categoria = request.form.get('categoria', '').strip()
+
+      conexion = obtener_conexion()
+      cursor = conexion.cursor()
+
+      query = (
+          '''
+                INSERT INTO productos (nombre, descripcion, precio, stock, categoria)
+                VALUES (%s, %s, %s, %s, %s)
+            '''
+          if database_url and POSTGRES_DISPONIBLE
+          else '''
+                INSERT INTO productos (nombre, descripcion, precio, stock, categoria)
+                VALUES (?, ?, ?, ?, ?)
+            '''
+      )
+      cursor.execute(query, (nombre, descripcion, precio, stock, categoria))
+      conexion.commit()
+      conexion.close()
+
+      flash('¡Producto registrado con éxito!')
+      return redirect(url_for('productos'))
+    except Exception as e:
+      print('*** ERROR CRITICO EN NUEVO_PRODUCTO (POST) ***')
+      traceback.print_exc()
+      raise
 
   return render_template('nuevo_producto.html')
 
 
-# Edición segura de producto con validación de existencia
 @app.route('/productos/editar/<int:id>', methods=['GET', 'POST'])
 def editar_producto(id):
   conexion = obtener_conexion()
   cursor = conexion.cursor()
 
   if request.method == 'POST':
-    nombre = request.form.get('nombre', '').strip()
-    descripcion = request.form.get('descripcion', '').strip()
     try:
-      precio = float(request.form.get('precio', 0))
-    except ValueError:
-      precio = 0.0
-    try:
-      stock = int(request.form.get('stock', 0))
-    except ValueError:
-      stock = 0
-    categoria = request.form.get('categoria', '').strip()
+      nombre = request.form.get('nombre', '').strip()
+      descripcion = request.form.get('descripcion', '').strip()
+      try:
+        precio = float(request.form.get('precio', 0))
+      except ValueError:
+        precio = 0.0
+      try:
+        stock = int(request.form.get('stock', 0))
+      except ValueError:
+        stock = 0
+      categoria = request.form.get('categoria', '').strip()
 
-    query = (
-        '''
-            UPDATE productos 
-            SET nombre = %s, descripcion = %s, precio = %s, stock = %s, categoria = %s
-            WHERE id = %s
-        '''
-        if database_url and POSTGRES_DISPONIBLE
-        else '''
-            UPDATE productos 
-            SET nombre = ?, descripcion = ?, precio = ?, stock = ?, categoria = ?
-            WHERE id = ?
-        '''
-    )
-    cursor.execute(
-        query, (nombre, descripcion, precio, stock, categoria, id)
-    )
-    conexion.commit()
-    conexion.close()
+      query = (
+          '''
+                UPDATE productos 
+                SET nombre = %s, descripcion = %s, precio = %s, stock = %s, categoria = %s
+                WHERE id = %s
+            '''
+          if database_url and POSTGRES_DISPONIBLE
+          else '''
+                UPDATE productos 
+                SET nombre = ?, descripcion = ?, precio = ?, stock = ?, categoria = ?
+                WHERE id = ?
+            '''
+      )
+      cursor.execute(
+          query, (nombre, descripcion, precio, stock, categoria, id)
+      )
+      conexion.commit()
+      conexion.close()
 
-    flash('¡Producto actualizado con éxito!')
-    return redirect(url_for('productos'))
+      flash('¡Producto actualizado con éxito!')
+      return redirect(url_for('productos'))
+    except Exception as e:
+      print('*** ERROR CRITICO EN EDITAR_PRODUCTO (POST) ***')
+      traceback.print_exc()
+      raise
 
   query_select = (
       'SELECT * FROM productos WHERE id = %s'
