@@ -52,6 +52,7 @@
         .brand-icon { display: grid; width: 44px; height: 44px; place-items: center; border: 3px solid white; border-radius: 16px; background: linear-gradient(145deg, #9472ff, #7047e8); box-shadow: 0 5px 13px #7047e83b; font-size: 1.3rem; transform: rotate(-4deg); }
         .brand strong { display: block; letter-spacing: -.025em; font-size: 1.04rem; }
         .brand small { display: block; color: var(--muted); font-size: .73rem; }
+        .company-pill { max-width: 190px; overflow: hidden; border: 1px solid #ece4f6; border-radius: 99px; padding: .35rem .7rem; color: #695b7d; background: #f8f4ff; font-size: .79rem; font-weight: 700; text-overflow: ellipsis; white-space: nowrap; }
         nav { display: flex; align-items: center; flex-wrap: wrap; gap: .25rem; }
         nav a, .nav-button { border: 0; border-radius: 12px; padding: .57rem .75rem; color: #686078; background: transparent; text-decoration: none; font: inherit; font-size: .9rem; font-weight: 700; cursor: pointer; transition: background .18s ease, color .18s ease, transform .18s ease; }
         nav a:hover, .nav-button:hover { background: #f1ebff; color: var(--blue); transform: translateY(-1px); }
@@ -149,6 +150,7 @@
         @media (max-width: 760px) {
             header { position: static; align-items: flex-start; flex-direction: column; padding: .8rem 1rem; }
             nav { width: 100%; }
+            .company-pill { order: -1; max-width: 100%; }
             nav a, .nav-button { padding: .5rem .55rem; font-size: .84rem; }
             .user-menu { margin-left: auto; }
             main { margin-top: 1.2rem; }
@@ -167,6 +169,7 @@
             .hero-sticker { right: 1%; width: 55px; height: 55px; border-width: 3px; border-radius: 18px; font-size: 1.65rem; opacity: .8; }
             .hero-welcome { padding-right: 4.5rem; }
             .user-menu { width: 100%; justify-content: flex-end; }
+            .company-pill { width: 100%; }
         }
         @media (prefers-reduced-motion: reduce) {
             *, *:before, *:after { scroll-behavior: auto !important; transition-duration: .01ms !important; animation-duration: .01ms !important; }
@@ -181,6 +184,7 @@
             <span><strong>Stock Claro</strong><small>Tu inventario, al día</small></span>
         </a>
         <nav aria-label="Navegación principal">
+            <span class="company-pill" title="{{ empresa_actual }}">🏢 {{ empresa_actual }}</span>
             <a class="{{ 'nav-active' if request.endpoint == 'index' else '' }}" href="{{ url_for('index') }}">Inicio</a>
             <a class="{{ 'nav-active' if request.endpoint in ('productos', 'nuevo_producto', 'editar_producto') else '' }}" href="{{ url_for('productos') }}">Productos</a>
             <a class="{{ 'nav-active' if request.endpoint == 'movimientos' else '' }}" href="{{ url_for('movimientos') }}">Compras y ventas</a>

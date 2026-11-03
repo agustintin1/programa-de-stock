@@ -27,6 +27,12 @@ Para ejecutar las pruebas automáticas:
 
 La aplicación conserva los productos de `stock.db` y los organiza inicialmente en **Depósito principal**. Los movimientos quedan asociados a la persona que los registra. Las ventas y los ajustes de salida no permiten dejar el stock negativo. El código de barras se puede escribir o escanear con un lector que funcione como teclado.
 
+## Espacios para distintas empresas (beta)
+
+Cada negocio puede crear su espacio desde **Crear cuenta** en `/registro`. Los productos, depósitos, usuarios, existencias e historial se separan por empresa. Los datos que ya existían se asignan al espacio inicial y no se comparten con los nuevos espacios.
+
+Los nombres de usuario deben ser únicos en toda la aplicación, incluso entre empresas. El registro está abierto y todavía no verifica el correo ni limita altas automatizadas; úsalo solo para pruebas, no con información crítica ni como servicio comercial listo para producción. Antes de actualizar una instalación existente, haz y verifica una copia de seguridad de la base de datos, especialmente en PostgreSQL.
+
 ## Datos y configuración
 
 - En modo local, la base de datos está en `stock.db`. Haz una copia de seguridad periódica; para copiarla con seguridad, detén la aplicación antes.

@@ -21,9 +21,55 @@ _LEGACY_DATABASE.execute('''
         categoria TEXT NOT NULL
     )
 ''')
+_LEGACY_DATABASE.execute('''
+    CREATE TABLE usuarios (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        nombre TEXT NOT NULL,
+        usuario TEXT NOT NULL UNIQUE,
+        password_hash TEXT NOT NULL,
+        rol TEXT NOT NULL CHECK (rol IN ('admin', 'operador')),
+        creado_en TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+    )
+''')
+_LEGACY_DATABASE.execute('''
+    CREATE TABLE ubicaciones (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        nombre TEXT NOT NULL UNIQUE,
+        activa INTEGER NOT NULL DEFAULT 1,
+        creada_en TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+    )
+''')
+_LEGACY_DATABASE.execute('''
+    CREATE TABLE existencias (
+        producto_id INTEGER NOT NULL REFERENCES productos(id),
+        ubicacion_id INTEGER NOT NULL REFERENCES ubicaciones(id),
+        cantidad INTEGER NOT NULL DEFAULT 0 CHECK (cantidad >= 0),
+        PRIMARY KEY (producto_id, ubicacion_id)
+    )
+''')
+_LEGACY_DATABASE.execute('''
+    CREATE TABLE movimientos (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        producto_id INTEGER NOT NULL REFERENCES productos(id),
+        ubicacion_id INTEGER NOT NULL REFERENCES ubicaciones(id),
+        usuario_id INTEGER NOT NULL REFERENCES usuarios(id),
+        tipo TEXT NOT NULL,
+        cantidad INTEGER NOT NULL CHECK (cantidad > 0),
+        proveedor TEXT,
+        nota TEXT,
+        creado_en TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+    )
+''')
 _LEGACY_DATABASE.execute(
     'INSERT INTO productos VALUES (1, ?, ?, ?, ?, ?)',
     ('Producto anterior', 'Debe conservarse', 12.5, 9, 'Prueba'),
+)
+_LEGACY_DATABASE.execute(
+    "INSERT INTO ubicaciones (id, nombre) VALUES (1, 'Depósito principal')"
+)
+_LEGACY_DATABASE.execute(
+    'INSERT INTO existencias (producto_id, ubicacion_id, cantidad) '
+    'VALUES (1, 1, 9)'
 )
 _LEGACY_DATABASE.commit()
 _LEGACY_DATABASE.close()
@@ -137,7 +183,8 @@ class InventarioTest(unittest.TestCase):
 
     with closing(sqlite3.connect(_DATABASE_PATH)) as conexion:
       stock = conexion.execute(
-          'SELECT cantidad FROM existencias WHERE producto_id = 1'
+          'SELECT cantidad FROM existencias '
+          'WHERE producto_id = 1 AND ubicacion_id = 1'
       ).fetchone()[0]
       stock_compatible = conexion.execute(
           'SELECT stock FROM productos WHERE id = 1'
@@ -234,6 +281,125 @@ class InventarioTest(unittest.TestCase):
     self.assertEqual(
         self.cliente.post('/productos/eliminar/1').status_code, 400
     )
+
+    respuesta = self.cliente.get('/registro')
+    respuesta = self.cliente.post('/registro', data={
+        '_csrf_token': self.csrf(respuesta),
+        'empresa': 'Mascotas Norte',
+        'nombre': 'Administradora nueva',
+        'usuario': 'admin_dos',
+        'password': 'OtraClaveSegura456!',
+    }, follow_redirects=True)
+    self.assertIn('¡El espacio de Mascotas Norte ya está listo!', respuesta.get_data(as_text=True))
+    self.assertNotIn('Producto anterior', self.cliente.get('/productos').get_data(as_text=True))
+
+    with closing(sqlite3.connect(_DATABASE_PATH)) as conexion:
+      empresa_original = conexion.execute(
+          "SELECT id FROM empresas WHERE clave = 'empresa-inicial'"
+      ).fetchone()[0]
+      empresa_nueva = conexion.execute(
+          "SELECT id FROM empresas WHERE nombre = 'Mascotas Norte'"
+      ).fetchone()[0]
+      deposito_nuevo = conexion.execute(
+          'SELECT id FROM ubicaciones '
+          'WHERE empresa_id = ? AND nombre = ?',
+          (empresa_nueva, 'Depósito principal'),
+      ).fetchone()[0]
+    self.assertNotEqual(empresa_original, empresa_nueva)
+
+    respuesta = self.cliente.get('/productos/nuevo')
+    respuesta = self.cliente.post('/productos/nuevo', data={
+        '_csrf_token': self.csrf(respuesta),
+        'nombre': 'Alimento para perros',
+        'descripcion': '',
+        'precio': '7.50',
+        'stock': '3',
+        'stock_minimo': '2',
+        'categoria': 'Mascotas',
+        'codigo_barras': '123456789',
+        'ubicacion_id': str(deposito_nuevo),
+    }, follow_redirects=True)
+    self.assertIn('Producto creado', respuesta.get_data(as_text=True))
+    self.assertIn('Alimento para perros', self.cliente.get('/productos').get_data(as_text=True))
+
+    respuesta = self.cliente.get('/usuarios')
+    usuarios_nuevos = respuesta.get_data(as_text=True)
+    self.assertIn('admin_dos', usuarios_nuevos)
+    self.assertNotRegex(usuarios_nuevos, r'<td>\s*operador\s*</td>')
+
+    respuesta = self.cliente.get('/movimientos')
+    respuesta = self.cliente.post('/movimientos', data={
+        '_csrf_token': self.csrf(respuesta),
+        'producto_id': '1',
+        'ubicacion_id': str(deposito_nuevo),
+        'tipo': 'venta',
+        'cantidad': '1',
+        'proveedor': '',
+        'nota': '',
+    }, follow_redirects=True)
+    self.assertIn('Selecciona un producto activo.', respuesta.get_data(as_text=True))
+    respuesta = self.cliente.get(
+        '/productos/editar/1', follow_redirects=True
+    )
+    self.assertIn('El producto no existe o fue archivado.', respuesta.get_data(as_text=True))
+    respuesta = self.cliente.get('/productos')
+    respuesta = self.cliente.post(
+        '/productos/eliminar/1',
+        data={'_csrf_token': self.csrf(respuesta)},
+        follow_redirects=True,
+    )
+    self.assertIn('El producto no existe o ya fue archivado.', respuesta.get_data(as_text=True))
+
+    respuesta = self.cliente.get('/reportes/movimientos.csv')
+    reporte = respuesta.get_data(as_text=True)
+    self.assertIn('Alimento para perros', reporte)
+    self.assertNotIn('Producto anterior', reporte)
+
+    respuesta = self.cliente.get('/registro')
+    respuesta = self.cliente.post('/registro', data={
+        '_csrf_token': self.csrf(respuesta),
+        'empresa': 'No debe crearse',
+        'nombre': 'Otra administradora',
+        'usuario': 'admin',
+        'password': 'OtraClaveSegura789!',
+    }, follow_redirects=True)
+    self.assertIn('Ese nombre de usuario ya está en uso.', respuesta.get_data(as_text=True))
+
+    inventario.inicializar_base_datos()
+    with closing(sqlite3.connect(_DATABASE_PATH)) as conexion:
+      producto_nuevo = conexion.execute(
+          'SELECT id FROM productos '
+          'WHERE empresa_id = ? AND nombre = ?',
+          (empresa_nueva, 'Alimento para perros'),
+      ).fetchone()
+      cantidad_empresas = conexion.execute(
+          'SELECT COUNT(*) FROM empresas'
+      ).fetchone()[0]
+      stock_original = conexion.execute(
+          'SELECT cantidad FROM existencias '
+          'WHERE producto_id = 1 AND ubicacion_id = 1'
+      ).fetchone()[0]
+      stock_nuevo = conexion.execute(
+          'SELECT cantidad FROM existencias '
+          'WHERE producto_id = ? AND ubicacion_id = ?',
+          (producto_nuevo[0], deposito_nuevo),
+      ).fetchone()[0]
+      cantidad_movimientos_nuevos = conexion.execute(
+          'SELECT COUNT(*) FROM movimientos WHERE empresa_id = ?',
+          (empresa_nueva,),
+      ).fetchone()[0]
+      producto_original_activo = conexion.execute(
+          'SELECT activo FROM productos WHERE id = 1'
+      ).fetchone()[0]
+      errores_foraneos = conexion.execute(
+          'PRAGMA foreign_key_check'
+      ).fetchall()
+    self.assertEqual(cantidad_empresas, 2)
+    self.assertEqual(stock_original, 8)
+    self.assertEqual(stock_nuevo, 3)
+    self.assertEqual(cantidad_movimientos_nuevos, 1)
+    self.assertEqual(producto_original_activo, 1)
+    self.assertEqual(errores_foraneos, [])
 
 
 if __name__ == '__main__':

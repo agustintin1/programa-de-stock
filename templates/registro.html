@@ -1,0 +1,34 @@
+{% extends 'base.html' %}
+{% block title %}Crear tu espacio · Stock Claro{% endblock %}
+{% block content %}
+<div class="auth-shell">
+    <section class="card auth-card">
+        <div class="auth-brand"><span class="auth-mark">🏪</span><span><strong>Stock Claro</strong><small>Un espacio para tu negocio</small></span></div>
+        <h1>Tu negocio, bien organizado ✨</h1>
+        <p class="muted">Crea tu espacio. Tus productos y tu equipo estarán separados de los demás negocios.</p>
+        <form method="post">
+            <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+            <div class="field">
+                <label for="empresa">Nombre de tu negocio</label>
+                <input id="empresa" name="empresa" maxlength="120" placeholder="Ej.: Patitas felices" autocomplete="organization" required autofocus>
+            </div>
+            <div class="field">
+                <label for="nombre">Tu nombre</label>
+                <input id="nombre" name="nombre" maxlength="120" placeholder="¿Cómo te llamas?" autocomplete="name" required>
+            </div>
+            <div class="field">
+                <label for="usuario">Elige un usuario</label>
+                <input id="usuario" name="usuario" minlength="3" maxlength="80" autocomplete="username" required>
+                <span class="hint">Debe ser distinto a los usuarios ya registrados.</span>
+            </div>
+            <div class="field">
+                <label for="password">Crea una contraseña</label>
+                <input id="password" type="password" name="password" minlength="12" autocomplete="new-password" required>
+                <span class="hint">Usa al menos 12 caracteres.</span>
+            </div>
+            <button class="btn" type="submit" style="width:100%">Crear mi espacio →</button>
+        </form>
+        <p class="auth-note">¿Ya tienes una cuenta? <a href="{{ url_for('login') }}">Inicia sesión aquí.</a></p>
+    </section>
+</div>
+{% endblock %}

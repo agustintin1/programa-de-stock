@@ -97,11 +97,71 @@ def columnas_de(cursor, tabla):
   return {fila['name'] for fila in cursor.fetchall()}
 
 
+def quitar_unicidad_global_de_ubicaciones_sqlite():
+  ruta_db = os.environ.get('STOCK_DATABASE', 'stock.db')
+  conexion = sqlite3.connect(ruta_db)
+  conexion.row_factory = sqlite3.Row
+  try:
+    conexion.execute('PRAGMA foreign_keys = OFF')
+    indices = conexion.execute('PRAGMA index_list(ubicaciones)').fetchall()
+    indice_nombre_unico = None
+    for indice in indices:
+      if not indice['unique']:
+        continue
+      columnas = conexion.execute(
+          f'PRAGMA index_info("{indice["name"]}")'
+      ).fetchall()
+      if [columna['name'] for columna in columnas] == ['nombre']:
+        indice_nombre_unico = indice['name']
+        break
+
+    if not indice_nombre_unico:
+      return
+
+    columnas = {
+        fila['name']
+        for fila in conexion.execute('PRAGMA table_info(ubicaciones)').fetchall()
+    }
+    empresa_columna = (
+        'empresa_id INTEGER REFERENCES empresas(id)'
+        if 'empresa_id' in columnas else 'empresa_id INTEGER'
+    )
+    conexion.execute(f'''
+      CREATE TABLE ubicaciones_nueva (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        nombre TEXT NOT NULL,
+        activa INTEGER NOT NULL DEFAULT 1,
+        creada_en TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        {empresa_columna}
+      )
+    ''')
+    conexion.execute('''
+      INSERT INTO ubicaciones_nueva (id, nombre, activa, creada_en, empresa_id)
+      SELECT id, nombre, activa, creada_en, empresa_id FROM ubicaciones
+    ''')
+    conexion.execute('DROP TABLE ubicaciones')
+    conexion.execute('ALTER TABLE ubicaciones_nueva RENAME TO ubicaciones')
+    conexion.commit()
+  except Exception:
+    conexion.rollback()
+    raise
+  finally:
+    conexion.close()
+
+
 def inicializar_base_datos():
   postgres = es_postgres()
   with obtener_conexion() as conexion:
     cursor = conexion.cursor()
     if postgres:
+      cursor.execute('''
+        CREATE TABLE IF NOT EXISTS empresas (
+          id SERIAL PRIMARY KEY,
+          nombre VARCHAR(120) NOT NULL,
+          clave VARCHAR(24) NOT NULL UNIQUE,
+          creada_en TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+        )
+      ''')
       cursor.execute('''
         CREATE TABLE IF NOT EXISTS productos (
           id SERIAL PRIMARY KEY,
@@ -125,7 +185,7 @@ def inicializar_base_datos():
       cursor.execute('''
         CREATE TABLE IF NOT EXISTS ubicaciones (
           id SERIAL PRIMARY KEY,
-          nombre VARCHAR(120) NOT NULL UNIQUE,
+          nombre VARCHAR(120) NOT NULL,
           activa BOOLEAN NOT NULL DEFAULT TRUE,
           creada_en TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
         )
@@ -153,6 +213,14 @@ def inicializar_base_datos():
       ''')
     else:
       cursor.execute('''
+        CREATE TABLE IF NOT EXISTS empresas (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          nombre TEXT NOT NULL,
+          clave TEXT NOT NULL UNIQUE,
+          creada_en TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+        )
+      ''')
+      cursor.execute('''
         CREATE TABLE IF NOT EXISTS productos (
           id INTEGER PRIMARY KEY AUTOINCREMENT,
           nombre TEXT NOT NULL,
@@ -175,7 +243,7 @@ def inicializar_base_datos():
       cursor.execute('''
         CREATE TABLE IF NOT EXISTS ubicaciones (
           id INTEGER PRIMARY KEY AUTOINCREMENT,
-          nombre TEXT NOT NULL UNIQUE,
+          nombre TEXT NOT NULL,
           activa INTEGER NOT NULL DEFAULT 1,
           creada_en TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
         )
@@ -202,6 +270,34 @@ def inicializar_base_datos():
         )
       ''')
 
+    ejecutar(
+        cursor,
+        '''
+        INSERT INTO empresas (nombre, clave)
+        VALUES (?, 'empresa-inicial')
+        ON CONFLICT (clave) DO NOTHING
+        ''',
+        (os.environ.get('STOCK_DEFAULT_COMPANY_NAME', 'Mi empresa')[:120],),
+    )
+    ejecutar(
+        cursor,
+        "SELECT id FROM empresas WHERE clave = 'empresa-inicial'",
+    )
+    empresa_inicial_id = cursor.fetchone()['id']
+
+    for tabla in ('productos', 'usuarios', 'ubicaciones', 'existencias', 'movimientos'):
+      columnas = columnas_de(cursor, tabla)
+      if 'empresa_id' not in columnas:
+        cursor.execute(
+            f'ALTER TABLE {tabla} ADD COLUMN empresa_id INTEGER '
+            'REFERENCES empresas(id)'
+        )
+      ejecutar(
+          cursor,
+          f'UPDATE {tabla} SET empresa_id = ? WHERE empresa_id IS NULL',
+          (empresa_inicial_id,),
+      )
+
     columnas = columnas_de(cursor, 'productos')
     columnas_nuevas = {
         'codigo_barras': 'TEXT' if not postgres else 'VARCHAR(80)',
@@ -213,32 +309,62 @@ def inicializar_base_datos():
       if nombre not in columnas:
         cursor.execute(f'ALTER TABLE productos ADD COLUMN {nombre} {tipo}')
 
+    cursor.execute('DROP INDEX IF EXISTS idx_productos_codigo_barras')
+
+    if postgres:
+      cursor.execute(
+          'ALTER TABLE ubicaciones '
+          'DROP CONSTRAINT IF EXISTS ubicaciones_nombre_key'
+      )
+
+  if not postgres:
+    quitar_unicidad_global_de_ubicaciones_sqlite()
+
+  with obtener_conexion() as conexion:
+    cursor = conexion.cursor()
     cursor.execute(
-        'CREATE UNIQUE INDEX IF NOT EXISTS idx_productos_codigo_barras '
-        'ON productos(codigo_barras)'
+        'CREATE UNIQUE INDEX IF NOT EXISTS idx_productos_empresa_codigo_barras '
+        'ON productos(empresa_id, codigo_barras) WHERE codigo_barras IS NOT NULL'
     )
+    cursor.execute(
+        'CREATE UNIQUE INDEX IF NOT EXISTS idx_ubicaciones_empresa_nombre '
+        'ON ubicaciones(empresa_id, nombre)'
+    )
+    for tabla in ('productos', 'usuarios', 'ubicaciones', 'existencias', 'movimientos'):
+      cursor.execute(
+          f'CREATE INDEX IF NOT EXISTS idx_{tabla}_empresa '
+          f'ON {tabla}(empresa_id)'
+      )
     cursor.execute(
         'CREATE INDEX IF NOT EXISTS idx_movimientos_fecha '
         'ON movimientos(creado_en)'
     )
     ejecutar(
         cursor,
-        'INSERT INTO ubicaciones (nombre) VALUES (?) ON CONFLICT (nombre) DO NOTHING',
-        ('Depósito principal',),
+        '''
+        INSERT INTO ubicaciones (nombre, empresa_id)
+        VALUES (?, ?) ON CONFLICT (empresa_id, nombre) DO NOTHING
+        ''',
+        ('Depósito principal', empresa_inicial_id),
     )
     ejecutar(
         cursor,
         '''
-        INSERT INTO existencias (producto_id, ubicacion_id, cantidad)
-        SELECT p.id, u.id, p.stock
+        INSERT INTO existencias
+          (producto_id, ubicacion_id, cantidad, empresa_id)
+        SELECT p.id, u.id, p.stock, p.empresa_id
         FROM productos p CROSS JOIN ubicaciones u
-        WHERE u.nombre = ?
+        WHERE u.empresa_id = ? AND u.nombre = ? AND p.empresa_id = ?
           AND NOT EXISTS (
             SELECT 1 FROM existencias e
             WHERE e.producto_id = p.id AND e.ubicacion_id = u.id
           )
         ''',
-        ('Depósito principal',),
+        (
+            empresa_inicial_id,
+            'Depósito principal',
+            empresa_inicial_id,
+        ),
     )
 
     admin_usuario = os.environ.get('STOCK_ADMIN_USERNAME')
@@ -252,13 +378,15 @@ def inicializar_base_datos():
       ejecutar(
           cursor,
           '''
-          INSERT INTO usuarios (nombre, usuario, password_hash, rol)
-          VALUES (?, ?, ?, 'admin') ON CONFLICT (usuario) DO NOTHING
+          INSERT INTO usuarios
+            (nombre, usuario, password_hash, rol, empresa_id)
+          VALUES (?, ?, ?, 'admin', ?) ON CONFLICT (usuario) DO NOTHING
           ''',
           (
               admin_usuario.strip(),
               admin_usuario.strip(),
               generate_password_hash(admin_password),
+              empresa_inicial_id,
           ),
       )
 
@@ -286,15 +414,52 @@ def validar_csrf():
 def datos_comunes():
   return {
       'usuario_actual': session.get('usuario'),
+      'empresa_actual': session.get('empresa'),
       'rol_actual': session.get('rol'),
       'csrf_token': token_csrf,
   }
 
 
+def cargar_empresa_de_usuario():
+  if session.get('empresa_id'):
+    return True
+  usuario_id = session.get('usuario_id')
+  if not usuario_id:
+    return False
+  with obtener_conexion() as conexion:
+    cursor = conexion.cursor()
+    ejecutar(
+        cursor,
+        '''
+        SELECT e.id, e.nombre
+        FROM usuarios u JOIN empresas e ON e.id = u.empresa_id
+        WHERE u.id = ?
+        ''',
+        (usuario_id,),
+    )
+    empresa = cursor.fetchone()
+  if not empresa:
+    session.clear()
+    return False
+  session['empresa_id'] = empresa['id']
+  session['empresa'] = empresa['nombre']
+  return True
+
+
+def iniciar_sesion(usuario):
+  session.clear()
+  session['usuario_id'] = usuario['id']
+  session['usuario'] = usuario['nombre']
+  session['rol'] = usuario['rol']
+  session['empresa_id'] = usuario['empresa_id']
+  session['empresa'] = usuario['empresa_nombre']
+  token_csrf()
+
+
 def requiere_login(funcion):
   @wraps(funcion)
   def protegida(*args, **kwargs):
-    if not session.get('usuario_id'):
+    if not session.get('usuario_id') or not cargar_empresa_de_usuario():
       return redirect(url_for('login', siguiente=request.path))
     return funcion(*args, **kwargs)
 
@@ -304,7 +469,7 @@ def requiere_login(funcion):
 def requiere_admin(funcion):
   @wraps(funcion)
   def protegida(*args, **kwargs):
-    if not session.get('usuario_id'):
+    if not session.get('usuario_id') or not cargar_empresa_de_usuario():
       return redirect(url_for('login', siguiente=request.path))
     if session.get('rol') != 'admin':
       abort(403)
@@ -321,9 +486,12 @@ def es_local():
 
 
 def obtener_ubicaciones(cursor, solo_activas=True):
-  filtro = 'WHERE activa = TRUE' if solo_activas else ''
+  filtro = 'AND activa = TRUE' if solo_activas else ''
   ejecutar(
-      cursor, f'SELECT id, nombre FROM ubicaciones {filtro} ORDER BY nombre'
+      cursor,
+      'SELECT id, nombre FROM ubicaciones '
+      'WHERE empresa_id = ? ' + filtro + ' ORDER BY nombre',
+      (session['empresa_id'],),
   )
   return cursor.fetchall()
 
@@ -370,27 +538,28 @@ def validar_precio(valor):
 
 def registrar_movimiento(
     cursor, producto_id, ubicacion_id, usuario_id, tipo, cantidad,
-    proveedor='', nota=''
+    empresa_id, proveedor='', nota=''
 ):
   entrada = tipo in ('compra', 'ajuste_entrada', 'inicial')
   if entrada:
     ejecutar(
         cursor,
         '''
-        INSERT INTO existencias (producto_id, ubicacion_id, cantidad)
-        VALUES (?, ?, ?) ON CONFLICT (producto_id, ubicacion_id)
+        INSERT INTO existencias (producto_id, ubicacion_id, cantidad, empresa_id)
+        VALUES (?, ?, ?, ?) ON CONFLICT (producto_id, ubicacion_id)
         DO UPDATE SET cantidad = existencias.cantidad + excluded.cantidad
         ''',
-        (producto_id, ubicacion_id, cantidad),
+        (producto_id, ubicacion_id, cantidad, empresa_id),
     )
   else:
     ejecutar(
         cursor,
         '''
         UPDATE existencias SET cantidad = cantidad - ?
-        WHERE producto_id = ? AND ubicacion_id = ? AND cantidad >= ?
+        WHERE producto_id = ? AND ubicacion_id = ? AND empresa_id = ?
+          AND cantidad >= ?
         ''',
-        (cantidad, producto_id, ubicacion_id, cantidad),
+        (cantidad, producto_id, ubicacion_id, empresa_id, cantidad),
     )
     if cursor.rowcount != 1:
       raise ValueError('No hay suficiente stock en esa ubicación.')
@@ -399,8 +568,9 @@ def registrar_movimiento(
       cursor,
       '''
       INSERT INTO movimientos
-        (producto_id, ubicacion_id, usuario_id, tipo, cantidad, proveedor, nota)
-      VALUES (?, ?, ?, ?, ?, ?, ?)
+        (producto_id, ubicacion_id, usuario_id, tipo, cantidad, proveedor, nota,
+         empresa_id)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
       ''',
       (
           producto_id,
@@ -410,6 +580,7 @@ def registrar_movimiento(
           cantidad,
           proveedor.strip() or None,
           nota.strip() or None,
+          empresa_id,
       ),
   )
   ejecutar(
@@ -417,10 +588,10 @@ def registrar_movimiento(
       '''
       UPDATE productos SET stock = (
         SELECT COALESCE(SUM(cantidad), 0) FROM existencias
-        WHERE producto_id = ?
-      ) WHERE id = ?
+        WHERE producto_id = ? AND empresa_id = ?
+      ) WHERE id = ? AND empresa_id = ?
       ''',
-      (producto_id, producto_id),
+      (producto_id, empresa_id, producto_id, empresa_id),
   )
 
 
@@ -442,7 +613,11 @@ def configurar():
       nombre = request.form.get('nombre', '').strip()
       usuario = request.form.get('usuario', '').strip()
       password = request.form.get('password', '')
-      if not nombre or len(usuario) < 3 or len(password) < 12:
+      if (
+          not nombre or len(nombre) > 120
+          or len(usuario) < 3 or len(usuario) > 80
+          or len(password) < 12
+      ):
         flash(
             'Completa tu nombre, usa un usuario de 3 caracteres y una '
             'contraseña de al menos 12 caracteres.',
@@ -451,16 +626,114 @@ def configurar():
       else:
         ejecutar(
             cursor,
-            '''
-            INSERT INTO usuarios (nombre, usuario, password_hash, rol)
-            VALUES (?, ?, ?, 'admin')
-            ''',
-            (nombre, usuario, generate_password_hash(password)),
+            "SELECT id, nombre FROM empresas WHERE clave = 'empresa-inicial'",
         )
+        empresa = cursor.fetchone()
+        ejecutar(
+            cursor,
+            '''
+            INSERT INTO usuarios
+              (nombre, usuario, password_hash, rol, empresa_id)
+            VALUES (?, ?, ?, 'admin', ?)
+            ''',
+            (
+                nombre,
+                usuario,
+                generate_password_hash(password),
+                empresa['id'],
+            ),
+        )
+        iniciar_sesion({
+            'id': cursor.lastrowid if not es_postgres() else 0,
+            'nombre': nombre,
+            'usuario': usuario,
+            'rol': 'admin',
+            'empresa_id': empresa['id'],
+            'empresa_nombre': empresa['nombre'],
+        })
+        if es_postgres():
+          ejecutar(cursor, 'SELECT id FROM usuarios WHERE usuario = ?', (usuario,))
+          session['usuario_id'] = cursor.fetchone()['id']
         flash('Administrador creado. Ya puedes iniciar sesión.', 'success')
-        return redirect(url_for('login'))
+        return redirect(url_for('index'))
 
   return render_template('configurar.html')
+
+
+@app.route('/registro', methods=['GET', 'POST'])
+def registro():
+  if request.method == 'POST':
+    empresa_nombre = request.form.get('empresa', '').strip()
+    nombre = request.form.get('nombre', '').strip()
+    usuario = request.form.get('usuario', '').strip()
+    password = request.form.get('password', '')
+    if (
+        not empresa_nombre or len(empresa_nombre) > 120
+        or not nombre or len(nombre) > 120
+        or len(usuario) < 3 or len(usuario) > 80
+        or len(password) < 12
+    ):
+      flash(
+          'Completa el negocio y tu nombre; el usuario debe tener '
+          '3 caracteres y la contraseña 12 como mínimo.',
+          'error',
+      )
+    else:
+      try:
+        with obtener_conexion() as conexion:
+          cursor = conexion.cursor()
+          clave_empresa = secrets.token_hex(12)
+          ejecutar(
+              cursor,
+              '''
+              INSERT INTO empresas (nombre, clave) VALUES (?, ?)
+              ''' + (' RETURNING id' if es_postgres() else ''),
+              (empresa_nombre, clave_empresa),
+          )
+          empresa_id = (
+              cursor.fetchone()['id'] if es_postgres() else cursor.lastrowid
+          )
+          ejecutar(
+              cursor,
+              '''
+              INSERT INTO ubicaciones (nombre, empresa_id)
+              VALUES ('Depósito principal', ?)
+              ''',
+              (empresa_id,),
+          )
+          ejecutar(
+              cursor,
+              '''
+              INSERT INTO usuarios
+                (nombre, usuario, password_hash, rol, empresa_id)
+              VALUES (?, ?, ?, 'admin', ?)
+              ''' + (' RETURNING id' if es_postgres() else ''),
+              (
+                  nombre,
+                  usuario,
+                  generate_password_hash(password),
+                  empresa_id,
+              ),
+          )
+          usuario_id = (
+              cursor.fetchone()['id'] if es_postgres() else cursor.lastrowid
+          )
+        iniciar_sesion({
+            'id': usuario_id,
+            'nombre': nombre,
+            'usuario': usuario,
+            'rol': 'admin',
+            'empresa_id': empresa_id,
+            'empresa_nombre': empresa_nombre,
+        })
+        flash(f'¡El espacio de {empresa_nombre} ya está listo!', 'success')
+        return redirect(url_for('index'))
+      except ERRORES_INTEGRIDAD:
+        flash(
+            'Ese nombre de usuario ya está en uso. Elige otro y prueba de nuevo.',
+            'error',
+        )
+  return render_template('registro.html')
 
 
 @app.route('/login', methods=['GET', 'POST'])
@@ -476,16 +749,16 @@ def login():
       password = request.form.get('password', '')
       ejecutar(
           cursor,
-          'SELECT * FROM usuarios WHERE usuario = ?',
+          '''
+          SELECT u.*, e.nombre AS empresa_nombre
+          FROM usuarios u JOIN empresas e ON e.id = u.empresa_id
+          WHERE u.usuario = ?
+          ''',
           (usuario,),
       )
       registro = cursor.fetchone()
       if registro and check_password_hash(registro['password_hash'], password):
-        session.clear()
-        session['usuario_id'] = registro['id']
-        session['usuario'] = registro['nombre']
-        session['rol'] = registro['rol']
-        token_csrf()
+        iniciar_sesion(registro)
         destino = request.args.get('siguiente', '')
         if not destino.startswith('/') or destino.startswith('//'):
           destino = url_for('index')
@@ -509,27 +782,37 @@ def index():
     cursor = conexion.cursor()
     ejecutar(
         cursor,
-        'SELECT COUNT(*) AS total FROM productos WHERE activo = TRUE',
+        '''
+        SELECT COUNT(*) AS total FROM productos
+        WHERE activo = TRUE AND empresa_id = ?
+        ''',
+        (session['empresa_id'],),
     )
     total_productos = cursor.fetchone()['total']
     ejecutar(
         cursor,
         '''
         SELECT COALESCE(SUM(e.cantidad * p.precio), 0) AS valor
-        FROM existencias e JOIN productos p ON p.id = e.producto_id
-        WHERE p.activo = TRUE
+        FROM existencias e
+        JOIN productos p
+          ON p.id = e.producto_id AND p.empresa_id = e.empresa_id
+        WHERE p.activo = TRUE AND p.empresa_id = ?
         ''',
+        (session['empresa_id'],),
     )
     valor_total = cursor.fetchone()['valor']
     ejecutar(
         cursor,
         '''
         SELECT COUNT(*) AS total FROM existencias e
-        JOIN productos p ON p.id = e.producto_id
-        JOIN ubicaciones u ON u.id = e.ubicacion_id
+        JOIN productos p
+          ON p.id = e.producto_id AND p.empresa_id = e.empresa_id
+        JOIN ubicaciones u
+          ON u.id = e.ubicacion_id AND u.empresa_id = e.empresa_id
         WHERE p.activo = TRUE AND u.activa = TRUE
-          AND e.cantidad <= p.stock_minimo
+          AND e.cantidad <= p.stock_minimo AND p.empresa_id = ?
         ''',
+        (session['empresa_id'],),
     )
     stock_critico = cursor.fetchone()['total']
     ejecutar(
@@ -538,12 +821,16 @@ def index():
         SELECT p.nombre AS producto, u.nombre AS ubicacion,
           COALESCE(e.cantidad, 0) AS cantidad, p.stock_minimo
         FROM existencias e
-        JOIN productos p ON p.id = e.producto_id
-        JOIN ubicaciones u ON u.id = e.ubicacion_id
+        JOIN productos p
+          ON p.id = e.producto_id AND p.empresa_id = e.empresa_id
+        JOIN ubicaciones u
+          ON u.id = e.ubicacion_id AND u.empresa_id = e.empresa_id
         WHERE p.activo = TRUE AND u.activa = TRUE
           AND e.cantidad <= p.stock_minimo
+          AND p.empresa_id = ? AND u.empresa_id = ?
         ORDER BY e.cantidad, p.nombre LIMIT 12
         ''',
+        (session['empresa_id'], session['empresa_id']),
     )
     productos_bajos = cursor.fetchall()
     ejecutar(
@@ -552,11 +839,16 @@ def index():
         SELECT m.tipo, m.cantidad, m.creado_en, p.nombre AS producto,
           u.nombre AS ubicacion, a.nombre AS usuario
         FROM movimientos m
-        JOIN productos p ON p.id = m.producto_id
-        JOIN ubicaciones u ON u.id = m.ubicacion_id
-        JOIN usuarios a ON a.id = m.usuario_id
+        JOIN productos p
+          ON p.id = m.producto_id AND p.empresa_id = m.empresa_id
+        JOIN ubicaciones u
+          ON u.id = m.ubicacion_id AND u.empresa_id = m.empresa_id
+        JOIN usuarios a
+          ON a.id = m.usuario_id AND a.empresa_id = m.empresa_id
+        WHERE m.empresa_id = ?
         ORDER BY m.id DESC LIMIT 8
         ''',
+        (session['empresa_id'],),
     )
     ultimos_movimientos = cursor.fetchall()
   return render_template(
@@ -593,7 +885,8 @@ def productos():
         FROM productos p
         LEFT JOIN existencias e
           ON e.producto_id = p.id AND e.ubicacion_id = ?
-        WHERE p.activo = TRUE
+            AND e.empresa_id = p.empresa_id AND e.empresa_id = ?
+        WHERE p.activo = TRUE AND p.empresa_id = ?
           AND (? = '' OR LOWER(p.nombre) LIKE LOWER(?)
             OR LOWER(p.categoria) LIKE LOWER(?)
             OR LOWER(COALESCE(p.codigo_barras, '')) LIKE LOWER(?))
@@ -601,6 +894,8 @@ def productos():
         ''',
         (
             ubicacion_id,
+            session['empresa_id'],
+            session['empresa_id'],
             busqueda,
             f'%{busqueda}%',
             f'%{busqueda}%',
@@ -653,8 +948,8 @@ def nuevo_producto():
             '''
             INSERT INTO productos
               (nombre, descripcion, precio, stock, categoria, codigo_barras,
-               stock_minimo)
-            VALUES (?, ?, ?, 0, ?, ?, ?)
+               stock_minimo, empresa_id)
+            VALUES (?, ?, ?, 0, ?, ?, ?, ?)
             ''' + (' RETURNING id' if es_postgres() else ''),
             (
                 nombre,
@@ -663,6 +958,7 @@ def nuevo_producto():
                 categoria,
                 codigo_barras,
                 stock_minimo,
+                session['empresa_id'],
             ),
         )
         producto_id = (
@@ -671,10 +967,12 @@ def nuevo_producto():
         ejecutar(
             cursor,
             '''
-            INSERT INTO existencias (producto_id, ubicacion_id, cantidad)
-            VALUES (?, ?, 0) ON CONFLICT (producto_id, ubicacion_id) DO NOTHING
+            INSERT INTO existencias
+              (producto_id, ubicacion_id, cantidad, empresa_id)
+            VALUES (?, ?, 0, ?)
+            ON CONFLICT (producto_id, ubicacion_id) DO NOTHING
             ''',
-            (producto_id, ubicacion_id),
+            (producto_id, ubicacion_id, session['empresa_id']),
         )
         if cantidad:
           registrar_movimiento(
@@ -684,6 +982,7 @@ def nuevo_producto():
               session['usuario_id'],
               'inicial',
               cantidad,
+              session['empresa_id'],
               nota='Stock inicial',
           )
         flash('Producto creado. Ya puedes registrar compras y ventas.', 'success')
@@ -705,7 +1004,14 @@ def nuevo_producto():
 def editar_producto(id):
   with obtener_conexion() as conexion:
     cursor = conexion.cursor()
-    ejecutar(cursor, 'SELECT * FROM productos WHERE id = ? AND activo = TRUE', (id,))
+    ejecutar(
+        cursor,
+        '''
+        SELECT * FROM productos
+        WHERE id = ? AND empresa_id = ? AND activo = TRUE
+        ''',
+        (id, session['empresa_id']),
+    )
     producto = cursor.fetchone()
     if not producto:
       flash('El producto no existe o fue archivado.', 'error')
@@ -734,7 +1040,7 @@ def editar_producto(id):
             '''
             UPDATE productos SET nombre = ?, descripcion = ?, precio = ?,
               categoria = ?, codigo_barras = ?, stock_minimo = ?
-            WHERE id = ?
+            WHERE id = ? AND empresa_id = ?
             ''',
             (
                 nombre,
@@ -744,6 +1050,7 @@ def editar_producto(id):
                 codigo_barras,
                 stock_minimo,
                 id,
+                session['empresa_id'],
             ),
         )
         flash('Producto actualizado.', 'success')
@@ -773,15 +1080,15 @@ def ajustar_stock(id, accion):
       cursor = conexion.cursor()
       ejecutar(
           cursor,
-          'SELECT id FROM productos WHERE id = ? AND activo = TRUE',
-          (id,),
+          'SELECT id FROM productos WHERE id = ? AND empresa_id = ? AND activo = TRUE',
+          (id, session['empresa_id']),
       )
       if not cursor.fetchone():
         abort(404)
       ejecutar(
           cursor,
-          'SELECT id FROM ubicaciones WHERE id = ? AND activa = TRUE',
-          (ubicacion_id,),
+          'SELECT id FROM ubicaciones WHERE id = ? AND empresa_id = ? AND activa = TRUE',
+          (ubicacion_id, session['empresa_id']),
       )
       if not cursor.fetchone():
         raise ValueError('Selecciona una ubicación activa.')
@@ -792,6 +1099,7 @@ def ajustar_stock(id, accion):
           session['usuario_id'],
           'ajuste_entrada' if accion == 'sumar' else 'ajuste_salida',
           1,
+          session['empresa_id'],
           nota='Ajuste rápido',
       )
     flash('Stock actualizado y movimiento registrado.', 'success')
@@ -809,9 +1117,9 @@ def eliminar_producto(id):
         cursor,
         '''
         SELECT COALESCE(SUM(cantidad), 0) AS stock
-        FROM existencias WHERE producto_id = ?
+        FROM existencias WHERE producto_id = ? AND empresa_id = ?
         ''',
-        (id,),
+        (id, session['empresa_id']),
     )
     if cursor.fetchone()['stock'] > 0:
       flash(
@@ -821,8 +1129,9 @@ def eliminar_producto(id):
     else:
       ejecutar(
           cursor,
-          'UPDATE productos SET activo = FALSE WHERE id = ? AND activo = TRUE',
-          (id,),
+          'UPDATE productos SET activo = FALSE '
+          'WHERE id = ? AND empresa_id = ? AND activo = TRUE',
+          (id, session['empresa_id']),
       )
       if cursor.rowcount:
         flash('Producto archivado; su historial se conserva.', 'success')
@@ -846,15 +1155,17 @@ def movimientos():
           raise ValueError('Selecciona un tipo de movimiento válido.')
         ejecutar(
             cursor,
-            'SELECT id FROM productos WHERE id = ? AND activo = TRUE',
-            (producto_id,),
+            'SELECT id FROM productos '
+            'WHERE id = ? AND empresa_id = ? AND activo = TRUE',
+            (producto_id, session['empresa_id']),
         )
         if not cursor.fetchone():
           raise ValueError('Selecciona un producto activo.')
         ejecutar(
             cursor,
-            'SELECT id FROM ubicaciones WHERE id = ? AND activa = TRUE',
-            (ubicacion_id,),
+            'SELECT id FROM ubicaciones '
+            'WHERE id = ? AND empresa_id = ? AND activa = TRUE',
+            (ubicacion_id, session['empresa_id']),
         )
         if not cursor.fetchone():
           raise ValueError('Selecciona una ubicación activa.')
@@ -865,6 +1176,7 @@ def movimientos():
             session['usuario_id'],
             tipo,
             cantidad,
+            session['empresa_id'],
             request.form.get('proveedor', ''),
             request.form.get('nota', ''),
         )
@@ -875,7 +1187,9 @@ def movimientos():
 
     ejecutar(
         cursor,
-        'SELECT id, nombre FROM productos WHERE activo = TRUE ORDER BY nombre',
+        'SELECT id, nombre FROM productos '
+        'WHERE activo = TRUE AND empresa_id = ? ORDER BY nombre',
+        (session['empresa_id'],),
     )
     productos_activos = cursor.fetchall()
     ubicaciones = obtener_ubicaciones(cursor)
@@ -885,11 +1199,16 @@ def movimientos():
         SELECT m.id, m.tipo, m.cantidad, m.proveedor, m.nota, m.creado_en,
           p.nombre AS producto, u.nombre AS ubicacion, a.nombre AS usuario
         FROM movimientos m
-        JOIN productos p ON p.id = m.producto_id
-        JOIN ubicaciones u ON u.id = m.ubicacion_id
-        JOIN usuarios a ON a.id = m.usuario_id
+        JOIN productos p
+          ON p.id = m.producto_id AND p.empresa_id = m.empresa_id
+        JOIN ubicaciones u
+          ON u.id = m.ubicacion_id AND u.empresa_id = m.empresa_id
+        JOIN usuarios a
+          ON a.id = m.usuario_id AND a.empresa_id = m.empresa_id
+        WHERE m.empresa_id = ?
         ORDER BY m.id DESC LIMIT 200
         ''',
+        (session['empresa_id'],),
     )
     historial = cursor.fetchall()
   return render_template(
@@ -911,11 +1230,16 @@ def exportar_movimientos():
         SELECT m.creado_en, p.nombre AS producto, u.nombre AS ubicacion,
           a.nombre AS usuario, m.tipo, m.cantidad, m.proveedor, m.nota
         FROM movimientos m
-        JOIN productos p ON p.id = m.producto_id
-        JOIN ubicaciones u ON u.id = m.ubicacion_id
-        JOIN usuarios a ON a.id = m.usuario_id
+        JOIN productos p
+          ON p.id = m.producto_id AND p.empresa_id = m.empresa_id
+        JOIN ubicaciones u
+          ON u.id = m.ubicacion_id AND u.empresa_id = m.empresa_id
+        JOIN usuarios a
+          ON a.id = m.usuario_id AND a.empresa_id = m.empresa_id
+        WHERE m.empresa_id = ?
         ORDER BY m.id DESC
         ''',
+        (session['empresa_id'],),
     )
     filas = cursor.fetchall()
   lineas = ['Fecha,Producto,Ubicacion,Usuario,Tipo,Cantidad,Proveedor,Nota']
@@ -948,11 +1272,15 @@ def ubicaciones():
     cursor = conexion.cursor()
     if request.method == 'POST':
       nombre = request.form.get('nombre', '').strip()
-      if not nombre:
-        flash('Escribe el nombre de la ubicación.', 'error')
+      if not nombre or len(nombre) > 120:
+        flash('Escribe un nombre de hasta 120 caracteres.', 'error')
       else:
         try:
-          ejecutar(cursor, 'INSERT INTO ubicaciones (nombre) VALUES (?)', (nombre,))
+          ejecutar(
+              cursor,
+              'INSERT INTO ubicaciones (nombre, empresa_id) VALUES (?, ?)',
+              (nombre, session['empresa_id']),
+          )
           flash('Ubicación creada.', 'success')
         except ERRORES_INTEGRIDAD:
           conexion.rollback()
@@ -971,7 +1299,11 @@ def usuarios():
       usuario = request.form.get('usuario', '').strip()
       password = request.form.get('password', '')
       rol = request.form.get('rol', '')
-      if not nombre or len(usuario) < 3 or len(password) < 12:
+      if (
+          not nombre or len(nombre) > 120
+          or len(usuario) < 3 or len(usuario) > 80
+          or len(password) < 12
+      ):
         flash(
             'Completa el nombre, usa un usuario de 3 caracteres y una '
             'contraseña de al menos 12 caracteres.',
@@ -984,10 +1316,17 @@ def usuarios():
           ejecutar(
               cursor,
               '''
-              INSERT INTO usuarios (nombre, usuario, password_hash, rol)
-              VALUES (?, ?, ?, ?)
+              INSERT INTO usuarios
+                (nombre, usuario, password_hash, rol, empresa_id)
+              VALUES (?, ?, ?, ?, ?)
               ''',
-              (nombre, usuario, generate_password_hash(password), rol),
+              (
+                  nombre,
+                  usuario,
+                  generate_password_hash(password),
+                  rol,
+                  session['empresa_id'],
+              ),
           )
           flash('Usuario creado.', 'success')
         except ERRORES_INTEGRIDAD:
@@ -995,7 +1334,9 @@ def usuarios():
           flash('Ese nombre de usuario ya está en uso.', 'error')
     ejecutar(
         cursor,
-        'SELECT id, nombre, usuario, rol, creado_en FROM usuarios ORDER BY nombre',
+        'SELECT id, nombre, usuario, rol, creado_en FROM usuarios '
+        'WHERE empresa_id = ? ORDER BY nombre',
+        (session['empresa_id'],),
     )
     lista_usuarios = cursor.fetchall()
   return render_template('usuarios.html', usuarios=lista_usuarios)
