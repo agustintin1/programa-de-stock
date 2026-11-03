@@ -1,10 +1,20 @@
 <!DOCTYPE html>
-<html lang="es">
+<html lang="es" data-theme="soft-dark">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="theme-color" content="#fff8ef">
+    <meta name="theme-color" content="#292a34">
     <title>{% block title %}Stock Claro{% endblock %}</title>
+    <script>
+        try {
+            const savedTheme = localStorage.getItem('stock-claro-theme');
+            if (savedTheme === 'light' || savedTheme === 'soft-dark') {
+                document.documentElement.dataset.theme = savedTheme;
+            }
+        } catch (error) {
+            console.warn('No se pudo leer la preferencia de tema.', error);
+        }
+    </script>
     <style>
         :root {
             --ink: #33264d;
@@ -174,6 +184,176 @@
         @media (prefers-reduced-motion: reduce) {
             *, *:before, *:after { scroll-behavior: auto !important; transition-duration: .01ms !important; animation-duration: .01ms !important; }
         }
+        :root[data-theme="soft-dark"] {
+            color-scheme: dark;
+            --ink: #f0ecf7;
+            --blue: #b49aff;
+            --mint: #294638;
+            --green: #91ddb0;
+            --red: #ff9eae;
+            --red-bg: #4a2d37;
+            --gold: #f3d28a;
+            --gold-bg: #493d2a;
+            --paper: #292a34;
+            --card: #333540;
+            --muted: #aaa7b5;
+            --line: #41434f;
+        }
+        :root[data-theme="soft-dark"] body {
+            background:
+                radial-gradient(ellipse at 9% 12%, #51433755 0, transparent 26rem),
+                radial-gradient(ellipse at 91% 23%, #44385e66 0, transparent 28rem),
+                var(--paper);
+            color: #e8e5ee;
+        }
+        :root[data-theme="soft-dark"] header {
+            color: var(--ink);
+            background: #30313bed;
+            border-bottom-color: #3c3d49;
+            box-shadow: 0 8px 26px #09090d40;
+        }
+        :root[data-theme="soft-dark"] .brand,
+        :root[data-theme="soft-dark"] .user-menu { color: var(--ink); }
+        :root[data-theme="soft-dark"] .brand small { color: var(--muted); }
+        :root[data-theme="soft-dark"] .company-pill {
+            border-color: #4b455b;
+            color: #d3c5f3;
+            background: #383342;
+        }
+        :root[data-theme="soft-dark"] nav a,
+        :root[data-theme="soft-dark"] .nav-button { color: #c2becb; }
+        :root[data-theme="soft-dark"] nav a:hover,
+        :root[data-theme="soft-dark"] .nav-button:hover {
+            color: #d4c4ff;
+            background: #403a4e;
+        }
+        :root[data-theme="soft-dark"] nav a.nav-active {
+            color: #211a31;
+            background: #b49aff;
+            box-shadow: 0 4px 12px #08070d55;
+        }
+        :root[data-theme="soft-dark"] .user-avatar {
+            border-color: #45414f;
+            color: #e0d2ff;
+            background: #403a4e;
+        }
+        :root[data-theme="soft-dark"] .hero-welcome {
+            border-color: #514638;
+            background: linear-gradient(110deg, #39352f 0%, #33313a 59%, #353242 100%);
+        }
+        :root[data-theme="soft-dark"] .hero-welcome:after { border-color: #ffffff10; }
+        :root[data-theme="soft-dark"] .hero-welcome p { color: #cbc5d2; }
+        :root[data-theme="soft-dark"] .hero-kicker { color: #f0c995; }
+        :root[data-theme="soft-dark"] .hero-sticker {
+            border-color: #514c5a;
+            background: #403a4e;
+            box-shadow: 0 12px 30px #09090d40;
+        }
+        :root[data-theme="soft-dark"] .card {
+            background: var(--card);
+            box-shadow: 0 10px 30px #09090d24;
+        }
+        :root[data-theme="soft-dark"] .metric:nth-child(1) {
+            border-color: #4b435e;
+            background: linear-gradient(140deg, #353742, #3b3749);
+        }
+        :root[data-theme="soft-dark"] .metric:nth-child(2) {
+            border-color: #3c5449;
+            background: linear-gradient(140deg, #353742, #353f3b);
+        }
+        :root[data-theme="soft-dark"] .metric:nth-child(3) {
+            border-color: #5a4d39;
+            background: linear-gradient(140deg, #353742, #433d33);
+        }
+        :root[data-theme="soft-dark"] .metric:after { border-color: #b49aff13; }
+        :root[data-theme="soft-dark"] .metric:nth-child(2):after { border-color: #60c38a18; }
+        :root[data-theme="soft-dark"] .metric:nth-child(3):after { border-color: #e6b45b1b; }
+        :root[data-theme="soft-dark"] .btn-secondary {
+            border-color: #4a4b58;
+            color: #ded8eb;
+            background: #343540;
+        }
+        :root[data-theme="soft-dark"] .btn-secondary:hover {
+            border-color: #7866a0;
+            color: #e1d5ff;
+            background: #403a4e;
+        }
+        :root[data-theme="soft-dark"] .btn-coral {
+            color: #382719;
+            background: linear-gradient(135deg, #f3c882, #eaa788);
+        }
+        :root[data-theme="soft-dark"] input,
+        :root[data-theme="soft-dark"] select,
+        :root[data-theme="soft-dark"] textarea {
+            border-color: #4a4b58;
+            color: #eeebf3;
+            background: #2b2c36;
+        }
+        :root[data-theme="soft-dark"] input::placeholder,
+        :root[data-theme="soft-dark"] textarea::placeholder { color: #9692a1; }
+        :root[data-theme="soft-dark"] input:focus,
+        :root[data-theme="soft-dark"] select:focus,
+        :root[data-theme="soft-dark"] textarea:focus {
+            outline-color: #b49aff36;
+            border-color: #9279c7;
+        }
+        :root[data-theme="soft-dark"] th,
+        :root[data-theme="soft-dark"] td { border-bottom-color: #41434f; }
+        :root[data-theme="soft-dark"] th {
+            color: #c0bbc9;
+            background: #333540;
+        }
+        :root[data-theme="soft-dark"] tbody tr:hover { background: #34323c; }
+        :root[data-theme="soft-dark"] .badge-neutral {
+            color: #ddceff;
+            background: #403a4e;
+        }
+        :root[data-theme="soft-dark"] .flash-success {
+            border-color: #3d5d49;
+            color: #a4e4ba;
+            background: #293a31;
+        }
+        :root[data-theme="soft-dark"] .flash-error {
+            border-color: #68414a;
+            color: #ffb1bb;
+            background: #402d33;
+        }
+        :root[data-theme="soft-dark"] .auth-card {
+            border-color: #41434f;
+            box-shadow: 0 20px 60px #09090d45;
+        }
+        :root[data-theme="soft-dark"] .auth-card:after { border-color: #403a4e; }
+        :root[data-theme="soft-dark"] .auth-mark {
+            border-color: #514c5a;
+            background: linear-gradient(145deg, #4a4034, #554534);
+            box-shadow: 0 6px 15px #09090d35;
+        }
+        :root[data-theme="soft-dark"] footer { color: #aaa7b5; }
+        .theme-toggle {
+            min-height: 36px;
+            border: 1px solid transparent;
+            border-radius: 12px;
+            padding: .5rem .7rem;
+            color: var(--ink);
+            background: transparent;
+            font: inherit;
+            font-size: .84rem;
+            font-weight: 750;
+            cursor: pointer;
+        }
+        .theme-toggle:hover {
+            border-color: var(--line);
+            color: var(--blue);
+            background: #f1ebff;
+        }
+        :root[data-theme="soft-dark"] .theme-toggle {
+            color: #c2becb;
+        }
+        :root[data-theme="soft-dark"] .theme-toggle:hover {
+            border-color: #4a4556;
+            color: #d4c4ff;
+            background: #403a4e;
+        }
     </style>
 </head>
 <body>
@@ -196,6 +376,9 @@
             <span class="user-menu">
                 <span class="user-avatar" aria-hidden="true">😊</span>
                 {{ usuario_actual }}
+                <button class="theme-toggle" id="theme-toggle" type="button" aria-pressed="true">
+                    ☀️ Claro
+                </button>
                 <form action="{{ url_for('salir') }}" method="post">
                     <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
                     <button class="nav-button" type="submit">Salir</button>
@@ -213,5 +396,32 @@
         {% block content %}{% endblock %}
     </main>
     {% if usuario_actual %}<footer>Simple para usar. Listo para crecer. ✨</footer>{% endif %}
+    <script>
+        const themeToggle = document.getElementById('theme-toggle');
+        if (themeToggle) {
+            const updateThemeToggle = () => {
+                const darkTheme = document.documentElement.dataset.theme === 'soft-dark';
+                themeToggle.textContent = darkTheme ? '☀️ Claro' : '🌙 Oscuro';
+                themeToggle.setAttribute('aria-pressed', String(darkTheme));
+                themeToggle.setAttribute(
+                    'aria-label',
+                    darkTheme ? 'Cambiar al tema claro' : 'Cambiar al tema oscuro'
+                );
+            };
+            updateThemeToggle();
+            themeToggle.addEventListener('click', () => {
+                const nextTheme = document.documentElement.dataset.theme === 'soft-dark'
+                    ? 'light'
+                    : 'soft-dark';
+                document.documentElement.dataset.theme = nextTheme;
+                updateThemeToggle();
+                try {
+                    localStorage.setItem('stock-claro-theme', nextTheme);
+                } catch (error) {
+                    console.warn('No se pudo guardar la preferencia de tema.', error);
+                }
+            });
+        }
+    </script>
 </body>
 </html>
